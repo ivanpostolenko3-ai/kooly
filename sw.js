@@ -1,5 +1,5 @@
 // Офлайн-кэш: приложение открывается без интернета.
-const CACHE = "kooly-v10";
+const CACHE = "kooly-v11";
 const ASSETS = [
   "./",
   "index.html",
@@ -39,7 +39,7 @@ self.addEventListener("fetch", (e) => {
   // Кэшируем только файлы самого Kooly: ответы Google, посредника и API не сохраняем.
   if (e.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.includes("/api/")) return;
   e.respondWith(
-    fetch(e.request)
+    fetch(e.request, { cache: "no-cache" }) // всегда сверяемся с сервером, чтобы файлы разных версий не смешивались
       .then((res) => {
         const copy = res.clone();
         caches.open(CACHE).then((c) => c.put(e.request, copy));

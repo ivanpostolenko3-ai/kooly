@@ -112,4 +112,5 @@ npx wrangler deploy    # выдаст адрес вида https://kooly-proxy.<�
 - `mac/` — таймер в строке меню Mac (Swift, SwiftUI)
 - `server.py` — локальный сервер на Mac: EduPage, страницы сайта школы, Stuudium через Chrome
 - `start.command` / `stop.command` — включить / выключить сервер
+- `release.sh` — перед публикацией: поднимает версию файлов, чтобы телефон не смешивал старые и новые
 - `sw.js`, `manifest.webmanifest`, `icons/` — офлайн и установка на экран «Домой»
