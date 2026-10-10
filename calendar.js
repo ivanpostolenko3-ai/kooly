@@ -14,7 +14,7 @@
 const GCAL_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.app.created";
 const GCAL_API = "https://www.googleapis.com/calendar/v3";
 // Client ID приложения Kooly в Google Cloud (не секрет). Если задан — в настройках только кнопка «Logi sisse Google'iga».
-const KOOLY_GOOGLE_CLIENT_ID = "";
+const KOOLY_GOOGLE_CLIENT_ID = "810943360481-inmj85vf6s72qvqk35u8tqqj925s9k71.apps.googleusercontent.com";
 const gcalClientId = () => KOOLY_GOOGLE_CLIENT_ID || state.gcal?.clientId || "";
 
 const GCAL_PAST_DAYS = 30;
