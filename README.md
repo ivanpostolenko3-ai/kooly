@@ -1,5 +1,7 @@
 # Kooly — школьный помощник (интерфейс на эстонском)
 
+**Открыть:** https://ivanpostolenko3-ai.github.io/kooly/ (на iPhone: Safari → «Поделиться» → «На экран „Домой“»)
+
 Веб-приложение (PWA) для iPhone и любого браузера: без App Store и подписки.
 Все данные хранятся только на устройстве (localStorage).
 
@@ -63,7 +65,8 @@ npx wrangler login     # вход в бесплатный аккаунт Cloudfl
 npx wrangler deploy    # выдаст адрес вида https://kooly-proxy.<имя>.workers.dev
 ```
 
-Адрес вписать в Kooly на телефоне: **Seaded → Ühendus**.
+Адрес развёрнутого посредника уже прописан в приложении по умолчанию (`DEFAULT_PROXY_URL` в `connect.js`).
+Другой адрес можно указать на телефоне: **Seaded → Ühendus**.
 
 **Stuudium на телефоне** — в Kooly: Seaded → Stuudium → «Otsetee seadistamine» (2 минуты, один раз).
 Ярлык читает только открытую страницу Stuudium и копирует домашку и оценки в буфер обмена; пароль никуда не уходит.

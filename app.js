@@ -833,7 +833,7 @@ function settingsSummary(page) {
     case "look":
       return { auto: "Automaatne", light: "Hele", dark: "Tume" }[state.theme];
     case "connection":
-      return hasServer ? "Arvuti server" : state.proxyUrl ? "Pilv · ühendatud" : "Pole seadistatud";
+      return hasServer ? "Arvuti server" : state.proxyUrl ? "Pilv · oma aadress" : "Pilv · Kooly vaikimisi";
     case "data":
       return "Varukoopia ja lähtestamine";
   }
@@ -972,10 +972,10 @@ function connectionPageHtml() {
     <section class="card">
       <label class="field-label" for="proxy-url">Pilveühenduse aadress (Cloudflare Worker)</label>
       <form class="composer" id="proxy-form" autocomplete="off">
-        <input class="input" id="proxy-url" value="${esc(state.proxyUrl || "")}" placeholder="https://kooly-proxy.….workers.dev" inputmode="url" />
+        <input class="input" id="proxy-url" value="${esc(state.proxyUrl || "")}" placeholder="${esc(DEFAULT_PROXY_URL)}" inputmode="url" />
         <button class="btn primary" type="submit">Salvesta</button>
       </form>
-      ${state.proxyUrl ? `<p class="muted small" style="margin:10px 0 0">Ühendatud. Tunniplaan uueneb kord päevas, menüü iga 3 tunni järel.</p>` : ""}
+      <p class="muted small" style="margin:10px 0 0">${state.proxyUrl ? "Kasutad oma aadressi." : "Kasutad Kooly vaikimisi pilveühendust — midagi pole vaja muuta."} Tunniplaan uueneb kord päevas, menüü iga 3 tunni järel. Tühjenda väli, et minna tagasi vaikimisi aadressile.</p>
     </section>
     <p class="page-lead">Pilveühendus on tasuta väike vahendaja, mis toob EduPage'i tunniplaani ja kooli menüü otse telefoni — arvutit pole vaja. Stuudium käib otsetee kaudu (Seaded → Stuudium).</p>`;
 }

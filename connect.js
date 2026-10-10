@@ -8,13 +8,18 @@
    Разбор меню и страниц Stuudium делается здесь, прямо в приложении.
    ========================================================= */
 
+// Облачный посредник по умолчанию (развёрнут из папки worker/). В Seaded → Ühendus можно указать другой.
+const DEFAULT_PROXY_URL = "https://kooly-proxy.ivanpostolenko3.workers.dev";
+
+const proxyUrl = () => state.proxyUrl || DEFAULT_PROXY_URL;
+
 // Есть ли посредник вообще (сервер на Mac или облачный Worker).
 function hasProxy() {
-  return hasServer || Boolean(state.proxyUrl);
+  return hasServer || Boolean(proxyUrl());
 }
 
 function proxyBase() {
-  return hasServer ? "api" : (state.proxyUrl || "").replace(/\/+$/, "");
+  return hasServer ? "api" : proxyUrl().replace(/\/+$/, "");
 }
 
 function edupageEndpoint(school, file, func) {

@@ -1,5 +1,5 @@
 // Офлайн-кэш: приложение открывается без интернета.
-const CACHE = "kooly-v7";
+const CACHE = "kooly-v8";
 const ASSETS = [
   "./",
   "index.html",
