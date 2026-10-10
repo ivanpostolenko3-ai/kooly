@@ -191,10 +191,23 @@ function save() {
   if (typeof gcalAutoSync === "function") gcalAutoSync();
 }
 
-// На Mac: отдаём снимок расписания и задач серверу — его читает таймер в строке меню (mac/KoolyMenu).
+// Kooly внутри приложения для iPhone (ios/): WKWebView даёт window.webkit.messageHandlers.kooly.
+const hasNative = Boolean(window.webkit?.messageHandlers?.kooly);
+
+function nativePost(message) {
+  try {
+    window.webkit.messageHandlers.kooly.postMessage(message);
+  } catch {
+    // не в приложении
+  }
+}
+
+// Снимок расписания и задач: на Mac — серверу (таймер в строке меню, mac/KoolyMenu),
+// в приложении для iPhone — нативной части (виджеты, Dynamic Island, уведомления).
 let shareTimer = null;
 function shareState() {
-  if (typeof hasServer === "undefined" || !hasServer) return;
+  const toServer = typeof hasServer !== "undefined" && hasServer;
+  if (!toServer && !hasNative) return;
   clearTimeout(shareTimer);
   shareTimer = setTimeout(() => {
     const snapshot = {
@@ -207,8 +220,23 @@ function shareState() {
         .filter((t) => !t.done && t.due)
         .map((t) => ({ title: t.title || t.text, subject: subjectById(t.subjectId)?.name || t.subjectName || "", due: t.due, kind: t.kind || "" })),
     };
-    fetch("api/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snapshot) }).catch(() => {});
+    if (toServer) fetch("api/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snapshot) }).catch(() => {});
+    if (hasNative) nativePost({ type: "state", snapshot: { ...snapshot, notify: state.notify, notifications: upcomingNotifications(3) } });
   }, 800);
+}
+
+// Все уведомления на ближайшие дни — приложение для iPhone ставит их в iOS, и они приходят даже при закрытом Kooly.
+function upcomingNotifications(days) {
+  if (!state.notify) return [];
+  const now = Date.now();
+  const out = [];
+  for (let i = 0; i <= days; i++) {
+    const day = addDays(new Date(), i);
+    for (const ev of scheduledEvents(day)) {
+      if (ev.at > now) out.push({ id: `${dateKey(day)}-${ev.key}`, at: ev.at, title: ev.title, body: ev.body, tab: ev.tab });
+    }
+  }
+  return out.sort((a, b) => a.at - b.at).slice(0, 60);
 }
 
 /* ---------- Aeg ja kuupäevad ---------- */
@@ -754,6 +782,8 @@ function renderTasks() {
   const st = state.stuudium;
   const sync = !st
     ? ""
+    : hasNative
+      ? `<button class="sync-pill ${stuudiumBusy ? "busy" : ""}" data-action="stuudium-native-sync">${ICONS.refresh}<span>${stuudiumBusy ? "Uuendan…" : st.lastSync ? `Stuudium · ${hhmm(new Date(st.lastSync))}` : "Stuudium"}</span></button>`
     : hasServer
       ? st.status === "connected"
         ? `<button class="sync-pill ${stuudiumBusy ? "busy" : ""}" data-action="stuudium-sync">${ICONS.refresh}<span>${stuudiumBusy ? "Uuendan…" : `Stuudium · ${hhmm(new Date(st.lastSync))}`}</span></button>`
@@ -915,7 +945,7 @@ function renderSettings() {
   const body = {
     schedule: schedulePageHtml,
     items: itemsPageHtml,
-    stuudium: () => (hasServer ? stuudiumCardHtml() : stuudiumPhoneHtml()) + stuCalCardHtml(),
+    stuudium: () => (hasNative ? stuudiumNativeHtml() : hasServer ? stuudiumCardHtml() : stuudiumPhoneHtml()) + stuCalCardHtml(),
     menu: () => (hasProxy() ? "" : proxyHintHtml("Menüü")) + menuPageHtml(),
     connection: connectionPageHtml,
     gcal: gcalPageHtml,
@@ -1337,6 +1367,12 @@ function importData() {
 /* ---------- Teavitused ---------- */
 
 async function enableNotifications(checkbox) {
+  if (hasNative) {
+    state.notify = true;
+    save();
+    nativePost({ type: "notify-permission" });
+    return;
+  }
   if (!("Notification" in window)) {
     checkbox.checked = false;
     toast("Teavituste jaoks lisa Kooly iPhone'i avaekraanile: Jaga → Lisa avaekraanile.");
@@ -1404,6 +1440,7 @@ function scheduledEvents(now) {
 }
 
 function checkNotifications(now) {
+  if (hasNative) return; // в приложении уведомления ставит iOS заранее
   if (!state.notify || typeof Notification === "undefined" || Notification.permission !== "granted") return;
   const key = dateKey(now);
   const fired = state.fired[key] || [];

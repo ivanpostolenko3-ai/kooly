@@ -110,6 +110,24 @@ async function stuudiumPaste() {
   } catch {
     return toast("Luba Kooly'l lõikelauda lugeda ja proovi uuesti.");
   }
+  importStuudiumPayload(raw, { mode: "phone" });
+}
+
+// Приложение для iPhone присылает то же, что собирает ярлык: JSON со страницы Stuudium или KOOLY-ERR:код.
+window.koolyNativeStuudium = (raw, quiet) => {
+  stuudiumBusy = false;
+  if (raw.startsWith("KOOLY-ERR:")) {
+    state.stuudium = { ...(state.stuudium || { school: STUUDIUM_DEFAULT_SCHOOL }), mode: "native", error: raw.slice(10) === "login" ? "login" : raw.slice(10) };
+    if (raw.slice(10) === "login") state.stuudium.status = "login";
+    save();
+    render();
+    if (!quiet) toast(raw.slice(10) === "login" ? "Logi Stuudiumi sisse (Seaded → Stuudium)" : stuudiumErrorText(raw.slice(10)));
+    return;
+  }
+  importStuudiumPayload(raw, { mode: "native", quiet });
+};
+
+function importStuudiumPayload(raw, { mode, quiet = false }) {
   if (raw.startsWith("KOOLY-ERR:")) {
     const code = raw.slice(10);
     return toast(code === "login" ? "Logi Safari's Stuudiumi sisse ja käivita otsetee uuesti." : code === "not-stuudium" ? "Käivita otsetee Stuudiumi lehel." : `Otsetee viga: ${code}`);
@@ -123,11 +141,30 @@ async function stuudiumPaste() {
   }
   const tasks = parseStuudiumTodos(data.todos || []);
   const grades = data.grades?.html ? parseStuudiumGrades(data.grades.html, data.grades.period) : null;
-  state.stuudium = { ...(state.stuudium || {}), school: data.school, mode: "phone" };
+  state.stuudium = { ...(state.stuudium || {}), school: data.school, mode };
   const added = applyStuudiumResult({ tasks, grades, school: data.school, warning: tasks.length ? null : "no-todos" }, data.at || Date.now());
   save();
   render();
-  toast(`Stuudium: ${plural(tasks.length, "kodutöö", "kodutööd")}${added ? `, uusi ${added}` : ""}${grades?.subjects?.length ? " ja hinded" : ""}`);
+  if (!quiet || added) toast(`Stuudium: ${plural(tasks.length, "kodutöö", "kodutööd")}${added ? `, uusi ${added}` : ""}${grades?.subjects?.length ? " ja hinded" : ""}`);
+}
+
+// Страница «Stuudium» в приложении: вход прямо в Kooly, дальше всё само.
+function stuudiumNativeHtml() {
+  const st = state.stuudium;
+  const connected = st?.status === "connected" && st.mode === "native";
+  const when = st?.lastSync ? `${humanDay(new Date(st.lastSync))} kell ${hhmm(new Date(st.lastSync))}` : null;
+  return `<section class="card">
+    <h2>Stuudium ${connected ? `<span class="soon-badge ok">ühendatud</span>` : ""}</h2>
+    <p class="muted small" style="margin:0 0 12px">${
+      connected
+        ? `Kodutööd ja hinded uuenevad ise, kui avad Kooly.${when ? ` Viimati ${when}.` : ""}`
+        : "Logi üks kord Stuudiumi sisse otse Kooly's (parool, Smart-ID või ID-kaart) ja märgi „Jäta mind meelde“. Edasi uueneb kõik ise."
+    }</p>
+    <div class="actions">
+      ${connected ? `<button class="btn small primary" data-action="stuudium-native-sync">Uuenda</button>` : `<button class="btn primary" data-action="stuudium-native-login">Logi Stuudiumi sisse</button>`}
+      ${connected ? `<button class="btn small" data-action="stuudium-native-login">Logi uuesti sisse</button>` : ""}
+    </div>
+  </section>`;
 }
 
 async function copyShortcutCode() {
@@ -231,6 +268,12 @@ async function handleStuudiumAction(action) {
     }
   } else if (action === "stuudium-sync") {
     stuudiumSync();
+  } else if (action === "stuudium-native-login") {
+    nativePost({ type: "stuudium-login", school: state.stuudium?.school || STUUDIUM_DEFAULT_SCHOOL });
+  } else if (action === "stuudium-native-sync") {
+    stuudiumBusy = true;
+    render();
+    nativePost({ type: "stuudium-sync", school: state.stuudium?.school || STUUDIUM_DEFAULT_SCHOOL });
   } else if (action === "stuudium-paste") {
     stuudiumPaste();
   } else if (action === "stuudium-copy-code") {
