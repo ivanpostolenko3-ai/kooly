@@ -240,16 +240,32 @@ function stuCalCardHtml() {
         ? `<p class="muted small" style="margin:0 0 10px">Kooli sündmused (Suhtlus → Kalender) uuenevad ise iga 3 tunni järel.${c.lastSync ? ` Viimati ${humanDay(new Date(c.lastSync))} kell ${hhmm(new Date(c.lastSync))}.` : ""}</p>`
         : `<ol class="steps">
             <li>Ava <a href="https://${esc(school)}.ope.ee/suhtlus/" target="_blank" rel="noopener">Stuudium → Suhtlus</a> → <b>Kalender</b>.</li>
-            <li>Kalendri seadetes vali <b>„Kalendri voog“</b> (iCal) ja vajuta <b>„Genereeri aadress“</b>.</li>
-            <li>Kopeeri aadress ja kleebi siia.</li>
+            <li>Keri alla ja vajuta <b>„Sündmused kalendrirakendusse“</b>.</li>
+            <li>„Kõik sündmused“ all <b>hoia sõrme</b> lingil „Kopeeri selle lingi aadress“ ja vali <b>„Kopeeri link“</b> (ära lihtsalt vajuta — siis avaneb kalender).</li>
+            <li>Tule tagasi ja vajuta <b>„Kleebi“</b>.</li>
           </ol>`
     }
     <form class="composer" id="stucal-form" autocomplete="off">
       <input class="input" id="stucal-url" value="${esc(c.url || "")}" placeholder="Kalendri voo aadress (https://… või webcal://…)" inputmode="url" />
       <button class="btn primary" type="submit">${stuCalBusy ? "…" : c.url ? "Uuenda" : "Lisa"}</button>
     </form>
+    ${c.url ? "" : `<div class="actions"><button class="btn small" data-action="stucal-paste">Kleebi lõikelaualt</button></div>`}
     ${c.error ? `<p class="error">${esc(stuCalErrorText(c.error))}</p>` : ""}
   </section>`;
+}
+
+// Вставка адреса ленты из буфера обмена (на iPhone спросит «Вставить?»).
+async function stuCalPaste() {
+  let url = "";
+  try {
+    url = (await navigator.clipboard.readText()).trim();
+  } catch {
+    return toast("Kleebi aadress väljale käsitsi (hoia sõrme väljal → Kleebi).");
+  }
+  if (!/^(https?|webcal):\/\//i.test(url)) return toast("Lõikelaual pole linki. Kopeeri Stuudiumist „Kõik sündmused“ lingi aadress.");
+  state.stuCal = { ...(state.stuCal || {}), url, error: null };
+  save();
+  stuCalSync();
 }
 
 function bindStuCal() {
@@ -296,6 +312,8 @@ function handleCalendarAction(action, btn) {
     return gcalCreateCalendar();
   } else if (action === "gcal-disconnect") {
     return gcalDisconnect();
+  } else if (action === "stucal-paste") {
+    return stuCalPaste();
   }
   render();
 }
