@@ -11,7 +11,7 @@ const DAYS = ["pühapäev", "esmaspäev", "teisipäev", "kolmapäev", "neljapäe
 const DAYS_SHORT = ["P", "E", "T", "K", "N", "R", "L"];
 const MONTHS = ["jaanuar", "veebruar", "märts", "aprill", "mai", "juuni", "juuli", "august", "september", "oktoober", "november", "detsember"];
 const MONTHS_SHORT = ["jaan", "veebr", "märts", "apr", "mai", "juuni", "juuli", "aug", "sept", "okt", "nov", "dets"];
-const TABS = ["now", "tomorrow", "tasks", "progress"];
+const TABS = ["now", "tomorrow", "tasks", "calendar", "progress"];
 
 const ICONS = {
   check: '<svg class="i" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
@@ -122,6 +122,7 @@ const DEFAULT_STATE = {
   source: null, // откуда импортировано расписание (EduPage)
   stuudium: null, // { school, status, lastSync, error, count, mode }
   proxyUrl: null, // адрес облачного посредника (Cloudflare Worker) для телефона
+  gcal: null, // Google Kalender: { clientId, calendarId, push, pull, events, … } — см. calendar.js
   fired: {}, // { "2026-10-12": ["key", …] } — какие уведомления уже показаны
 };
 
@@ -186,6 +187,7 @@ function save() {
     toast("Andmeid ei õnnestunud seadmesse salvestada");
   }
   shareState();
+  if (typeof gcalAutoSync === "function") gcalAutoSync();
 }
 
 // На Mac: отдаём снимок расписания и задач серверу — его читает таймер в строке меню (mac/KoolyMenu).
@@ -486,6 +488,7 @@ function render() {
   else if (currentTab === "tomorrow") renderTomorrow();
   else if (currentTab === "tasks") renderTasks();
   else if (currentTab === "progress") renderProgress();
+  else if (currentTab === "calendar") renderCalendar();
   else renderSettings();
 }
 
@@ -848,6 +851,7 @@ const SETTINGS_PAGES = {
   items: { title: "Asjad", icon: "bag" },
   stuudium: { title: "Stuudium", icon: "book" },
   menu: { title: "Söökla menüü", icon: "food" },
+  gcal: { title: "Google Kalender", icon: "calendar" },
   notify: { title: "Teavitused", icon: "bell" },
   look: { title: "Välimus", icon: "palette" },
   connection: { title: "Ühendus", icon: "cloud" },
@@ -871,6 +875,8 @@ function settingsSummary(page) {
     case "menu":
       if (state.menu?.off) return "Väljas";
       return state.menu?.data?.days?.length ? `${state.menu.site} · nädal alates ${shortDate(state.menu.data.weekStart)}` : state.menu?.site || MENU_DEFAULT_SITE;
+    case "gcal":
+      return state.gcal?.calendarId ? `Ühendatud · ${state.gcal.calendarName || "kalender"}` : "Pole ühendatud";
     case "notify":
       return state.notify ? `Sees · ranits kell ${state.bagTime}` : "Väljas";
     case "look":
@@ -909,6 +915,7 @@ function renderSettings() {
     stuudium: () => (hasServer ? stuudiumCardHtml() : stuudiumPhoneHtml()),
     menu: () => (hasProxy() ? "" : proxyHintHtml("Menüü")) + menuPageHtml(),
     connection: connectionPageHtml,
+    gcal: gcalPageHtml,
     notify: notifyPageHtml,
     look: lookPageHtml,
     data: dataPageHtml,
@@ -1215,6 +1222,7 @@ document.addEventListener("click", (e) => {
     render();
     return window.scrollTo(0, 0);
   }
+  if (action.startsWith("cal-") || action.startsWith("gcal-") || action === "ics-export") return handleCalendarAction(action, btn);
   if (action.startsWith("edupage-")) return handleEdupageAction(action);
   if (action.startsWith("stuudium-")) return handleStuudiumAction(action);
   const taskRow = btn.closest("[data-task]");
@@ -1224,6 +1232,7 @@ document.addEventListener("click", (e) => {
     t.done = !t.done;
   } else if (action === "delete-task") {
     const t = state.tasks.find((x) => x.id === taskRow.dataset.task);
+    gcalForgetTask(t); // событие в Google Kalender тоже удаляется
     // Задание из Stuudium вернулось бы при следующей синхронизации — просто прячем его.
     if (t.source === "stuudium") t.dismissed = true;
     else state.tasks = state.tasks.filter((x) => x !== t);
@@ -1286,7 +1295,8 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("change", (e) => {
-  if (e.target.matches('[data-field^="ep-"]')) handleEdupageField(e.target);
+  if (e.target.matches('[data-field^="gcal-"]')) handleGcalField(e.target);
+  else if (e.target.matches('[data-field^="ep-"]')) handleEdupageField(e.target);
   else if (e.target.matches("[data-field]")) handleScheduleChange(e.target);
 });
 

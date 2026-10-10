@@ -1,5 +1,5 @@
 // Офлайн-кэш: приложение открывается без интернета.
-const CACHE = "kooly-v9";
+const CACHE = "kooly-v10";
 const ASSETS = [
   "./",
   "index.html",
@@ -9,6 +9,7 @@ const ASSETS = [
   "stuudium.js",
   "progress.js",
   "menu.js",
+  "calendar.js",
   "app.js",
   "fonts/mulish-cyrillic.woff2",
   "fonts/mulish-latin.woff2",
@@ -34,7 +35,9 @@ self.addEventListener("activate", (e) => {
 
 // Сначала сеть (чтобы обновления доходили сразу), без сети — из кэша.
 self.addEventListener("fetch", (e) => {
-  if (e.request.method !== "GET" || new URL(e.request.url).pathname.includes("/api/")) return;
+  const url = new URL(e.request.url);
+  // Кэшируем только файлы самого Kooly: ответы Google, посредника и API не сохраняем.
+  if (e.request.method !== "GET" || url.origin !== self.location.origin || url.pathname.includes("/api/")) return;
   e.respondWith(
     fetch(e.request)
       .then((res) => {
