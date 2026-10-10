@@ -13,6 +13,10 @@
 
 const GCAL_SCOPES = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly https://www.googleapis.com/auth/calendar.app.created";
 const GCAL_API = "https://www.googleapis.com/calendar/v3";
+// Client ID приложения Kooly в Google Cloud (не секрет). Если задан — в настройках только кнопка «Logi sisse Google'iga».
+const KOOLY_GOOGLE_CLIENT_ID = "";
+const gcalClientId = () => KOOLY_GOOGLE_CLIENT_ID || state.gcal?.clientId || "";
+
 const GCAL_PAST_DAYS = 30;
 const GCAL_FUTURE_DAYS = 120;
 
@@ -376,7 +380,7 @@ async function gcalAccessToken(interactive) {
   await loadGis();
   if (!gcalClient) {
     gcalClient = google.accounts.oauth2.initTokenClient({
-      client_id: state.gcal.clientId,
+      client_id: gcalClientId(),
       scope: GCAL_SCOPES,
       callback: (r) => {
         const p = gcalPending;
@@ -416,8 +420,9 @@ async function gapi(path, { method = "GET", body, token } = {}) {
 }
 
 async function gcalConnect() {
+  if (!state.gcal) state.gcal = { push: true, pull: true };
   const input = document.getElementById("gcal-client");
-  if (input) {
+  if (input && !KOOLY_GOOGLE_CLIENT_ID) {
     const id = input.value.trim();
     if (!/\.apps\.googleusercontent\.com$/.test(id)) return toast("See ei näe välja nagu Client ID (…apps.googleusercontent.com)");
     state.gcal = { ...(state.gcal || {}), clientId: id, push: state.gcal?.push ?? true, pull: state.gcal?.pull ?? true };
@@ -464,7 +469,7 @@ function gcalDisconnect() {
   gcalClient = null;
   gcalCalendars = null;
   const clientId = state.gcal?.clientId;
-  state.gcal = clientId ? { clientId, push: true, pull: true } : null;
+  state.gcal = clientId && !KOOLY_GOOGLE_CLIENT_ID ? { clientId, push: true, pull: true } : null;
   state.tasks.forEach((t) => delete t.gcal);
   save();
   render();
@@ -634,11 +639,12 @@ function gcalPageHtml() {
       </form>
     </details>`;
 
-  if (!g.clientId || !g.granted) {
-    return `${setup}
+  const builtIn = Boolean(KOOLY_GOOGLE_CLIENT_ID);
+  if (!g.granted) {
+    return `${builtIn ? "" : setup}
       <section class="card">
         <p class="muted small" style="margin:0 0 12px">Kooly paneb kodutööd ja kontrolltööd sinu Google Kalendrisse ning näitab Google'i sündmusi Kooly kalendris. Muudatused liiguvad mõlemas suunas.</p>
-        <button class="btn primary" data-action="gcal-connect">Ühenda Google Kalender</button>
+        <button class="btn primary google-btn" data-action="gcal-connect">${builtIn ? "Logi sisse Google'iga" : "Ühenda Google Kalender"}</button>
       </section>`;
   }
 
@@ -669,7 +675,7 @@ function gcalPageHtml() {
       ${g.lastSync ? `<p class="muted small" style="margin:10px 0 0">Viimati ${humanDay(new Date(g.lastSync))} kell ${hhmm(new Date(g.lastSync))}</p>` : ""}
     </section>
     <p class="page-lead">Soovitus: kasuta eraldi kalendrit „Kooly“ — siis on kooliasjad omaette ja neid saab Google'is ühe klikiga peita. Google'i luba kehtib tund aega; pärast seda vajuta „Sünkrooni“.</p>
-    ${setup}`;
+    ${builtIn ? "" : setup}`;
 }
 
 function handleGcalField(el) {
