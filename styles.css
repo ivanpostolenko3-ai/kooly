@@ -48,6 +48,7 @@
   --on-accent: #002329;
   --danger: #d64545;
   --danger-soft: #ffe7e7;
+  --event: #d9622b;
   --bar: rgba(255, 255, 255, 0.86);
   --shadow: 0 12px 32px rgba(0, 47, 55, 0.08);
   --shadow-strong: 0 18px 44px rgba(0, 47, 55, 0.18);
@@ -84,6 +85,7 @@
     --on-accent: #002329;
     --danger: #ff8080;
     --danger-soft: rgba(255, 92, 92, 0.16);
+    --event: #ff9a62;
     --bar: rgba(4, 37, 43, 0.86);
     --shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
     --shadow-strong: 0 18px 44px rgba(0, 0, 0, 0.5);
@@ -109,6 +111,7 @@
   --on-accent: #002329;
   --danger: #ff8080;
   --danger-soft: rgba(255, 92, 92, 0.16);
+  --event: #ff9a62;
   --bar: rgba(4, 37, 43, 0.86);
   --shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
   --shadow-strong: 0 18px 44px rgba(0, 0, 0, 0.5);
@@ -2265,4 +2268,24 @@ select.input option {
     font-size: 0.6rem;
     letter-spacing: -0.01em;
   }
+}
+
+.dot-school,
+.gcal-event.stuudium .gcal-bar {
+  background: var(--event);
+}
+
+.gcal-event.google .gcal-bar {
+  background: var(--brand-2);
+}
+
+.gcal-desc {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  white-space: pre-line;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }

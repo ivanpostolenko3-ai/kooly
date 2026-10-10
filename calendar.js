@@ -38,11 +38,22 @@ function dayGoogleEvents(key) {
   return (state.gcal.events || []).filter((e) => e.startDate <= key && key < e.endDate);
 }
 
+function daySchoolEvents(key) {
+  return (state.stuCal?.events || []).filter((e) => e.startDate <= key && key < e.endDate);
+}
+
+// Все события дня: школьные (Stuudium) и Google — по времени, «весь день» сверху.
+function dayEvents(key) {
+  const all = [...daySchoolEvents(key).map((e) => ({ ...e, source: "stuudium" })), ...dayGoogleEvents(key).map((e) => ({ ...e, source: "google" }))];
+  return all.sort((a, b) => (a.allDay === b.allDay ? String(a.start).localeCompare(String(b.start)) : a.allDay ? -1 : 1));
+}
+
 function dayDots(key) {
   const tasks = dayTasks(key).filter((t) => !t.done);
   const dots = [];
   if (tasks.some(isTest)) dots.push("test");
   if (tasks.some((t) => !isTest(t))) dots.push("task");
+  if (daySchoolEvents(key).length) dots.push("school");
   if (dayGoogleEvents(key).length) dots.push("google");
   return dots;
 }
@@ -74,7 +85,7 @@ function renderCalendar() {
   const sel = fromKey(calSelected);
   const lessons = lessonsFor(sel);
   const tasks = dayTasks(calSelected);
-  const events = dayGoogleEvents(calSelected);
+  const events = dayEvents(calSelected);
   const upcomingTests = sortByDeadline(visibleTasks().filter((t) => !t.done && t.due && t.due >= todayKey && isTest(t))).slice(0, 5);
   const g = state.gcal;
 
@@ -97,7 +108,7 @@ function renderCalendar() {
         ${["E", "T", "K", "N", "R", "L", "P"].map((d) => `<span class="cal-wd">${d}</span>`).join("")}
         ${cells.join("")}
       </div>
-      <div class="cal-legend"><span><i class="dot dot-test"></i>kontrolltöö</span><span><i class="dot dot-task"></i>ülesanne</span>${g?.calendarId && g?.pull ? `<span><i class="dot dot-google"></i>Google</span>` : ""}
+      <div class="cal-legend"><span><i class="dot dot-test"></i>kontrolltöö</span><span><i class="dot dot-task"></i>ülesanne</span>${state.stuCal?.events?.length ? `<span><i class="dot dot-school"></i>kooli sündmus</span>` : ""}${g?.calendarId && g?.pull ? `<span><i class="dot dot-google"></i>Google</span>` : ""}
         ${calSelected !== todayKey ? `<button class="link" data-action="cal-today">Täna</button>` : ""}</div>
     </section>
 
@@ -115,7 +126,149 @@ function renderCalendar() {
 
 function gcalEventHtml(e) {
   const time = e.allDay ? "Terve päev" : `${hhmm(new Date(e.start))}–${hhmm(new Date(e.end))}`;
-  return `<li class="gcal-event"><span class="gcal-bar"></span><span class="grow"><b>${esc(e.summary || "(pealkirjata)")}</b><small>${time}${e.location ? ` · ${esc(e.location)}` : ""}</small></span></li>`;
+  const from = e.source === "stuudium" ? " · Stuudium" : e.source === "google" ? " · Google" : "";
+  return `<li class="gcal-event ${e.source || ""}"><span class="gcal-bar"></span><span class="grow"><b>${esc(e.summary || "(pealkirjata)")}</b><small>${time}${e.location ? ` · ${esc(e.location)}` : ""}${from}</small>${
+    e.description ? `<span class="gcal-desc">${esc(e.description)}</span>` : ""
+  }</span></li>`;
+}
+
+/* ---------- Stuudiumi kalender (Suhtlus): iCal-лента событий ----------
+   В Stuudium: Suhtlus → Kalender → «Kalendri voog» — личная ссылка-лента (iCal) со всеми событиями своих групп.
+   Kooly читает её через посредника (сервер на Mac или облачный Worker) и обновляет сама. */
+
+const STUCAL_REFRESH_MS = 3 * 60 * 60 * 1000;
+let stuCalBusy = false;
+
+function icsParseDate(value, params) {
+  const m = value.match(/^(\d{4})(\d{2})(\d{2})(?:T(\d{2})(\d{2})(\d{2})(Z)?)?/);
+  if (!m) return null;
+  const allDay = params.some((p) => p.toUpperCase() === "VALUE=DATE") || !m[4];
+  if (allDay) return { allDay: true, iso: `${m[1]}-${m[2]}-${m[3]}` };
+  const [, y, mo, d, h, mi, s, z] = m.map((x, i) => (i && i < 7 ? Number(x) : x));
+  const date = z ? new Date(Date.UTC(y, mo - 1, d, h, mi, s)) : new Date(y, mo - 1, d, h, mi, s); // TZID → время Эстонии (как у устройства)
+  return { allDay: false, iso: date.toISOString() };
+}
+
+function parseIcs(text) {
+  const lines = text.replace(/\r\n[ \t]/g, "").replace(/\n[ \t]/g, "").split(/\r?\n/);
+  const unescape = (v) => v.replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1");
+  const events = [];
+  let ev = null;
+  for (const line of lines) {
+    if (line === "BEGIN:VEVENT") ev = {};
+    else if (line === "END:VEVENT") {
+      if (ev?.start && ev.status !== "CANCELLED") events.push(ev);
+      ev = null;
+    } else if (ev) {
+      const colon = line.indexOf(":");
+      if (colon < 0) continue;
+      const [rawName, ...params] = line.slice(0, colon).split(";");
+      const name = rawName.toUpperCase();
+      const value = line.slice(colon + 1);
+      if (name === "SUMMARY") ev.summary = unescape(value);
+      else if (name === "DESCRIPTION") ev.description = unescape(value).trim();
+      else if (name === "LOCATION") ev.location = unescape(value);
+      else if (name === "UID") ev.id = value;
+      else if (name === "STATUS") ev.status = value.toUpperCase();
+      else if (name === "DTSTART" || name === "DTEND") {
+        const d = icsParseDate(value, params);
+        if (!d) continue;
+        if (name === "DTSTART") {
+          ev.start = d.iso;
+          ev.allDay = d.allDay;
+        } else ev.end = d.iso;
+      }
+    }
+  }
+  // Приводим к виду событий календаря Kooly (как у Google).
+  return events.map((e) => {
+    const startDate = e.allDay ? e.start : dateKey(new Date(e.start));
+    const end = e.end || (e.allDay ? dateKey(addDays(fromKey(e.start), 1)) : e.start);
+    const endDate = e.allDay ? end : dateKey(addDays(new Date(end), 1));
+    return { id: e.id || shortHash(`${e.start}|${e.summary}`), summary: e.summary || "", description: e.description || "", location: e.location || "", allDay: e.allDay, start: e.start, end, startDate, endDate };
+  });
+}
+
+async function stuCalSync({ quiet = false } = {}) {
+  const c = state.stuCal;
+  if (!c?.url || stuCalBusy) return;
+  stuCalBusy = true;
+  try {
+    const page = await fetchPage(c.url.replace(/^webcal:\/\//i, "https://"));
+    if (!/BEGIN:VCALENDAR/.test(page.text)) throw new Error("not-ics");
+    const from = dateKey(addDays(new Date(), -60)), to = dateKey(addDays(new Date(), 240));
+    c.events = parseIcs(page.text).filter((e) => e.endDate >= from && e.startDate <= to);
+    c.lastSync = Date.now();
+    c.error = null;
+    if (!quiet) toast(`Stuudiumi kalender: ${plural(c.events.length, "sündmus", "sündmust")}`);
+  } catch (e) {
+    c.error = e.message;
+    if (!quiet) toast(stuCalErrorText(e.message));
+  } finally {
+    stuCalBusy = false;
+    save();
+    if (["calendar", "tomorrow", "now"].includes(currentTab) || onSettingsPage("stuudium")) render();
+  }
+}
+
+function stuCalAutoSync() {
+  const c = state.stuCal;
+  if (c?.url && hasProxy() && Date.now() - (c.lastSync || 0) > STUCAL_REFRESH_MS) stuCalSync({ quiet: true });
+}
+
+function stuCalErrorText(code) {
+  return (
+    {
+      "not-ics": "See link ei ole kalendri voog. Kopeeri Stuudiumist „Kalendri voo“ aadress.",
+      "not-allowed": "Pilveühendus ei luba seda aadressi (Workeri ALLOWED_SITES).",
+      "no-proxy": "Kalendri laadimiseks on vaja ühendust (Seaded → Ühendus).",
+    }[code] || "Stuudiumi kalendrit ei õnnestunud laadida. Proovi uuesti."
+  );
+}
+
+function stuCalCardHtml() {
+  const c = state.stuCal || {};
+  const school = state.stuudium?.school || STUUDIUM_DEFAULT_SCHOOL;
+  return `<section class="card">
+    <h2>Stuudiumi kalender ${c.events ? `<span class="soon-badge ok">${plural(c.events.length, "sündmus", "sündmust")}</span>` : ""}</h2>
+    ${
+      c.url
+        ? `<p class="muted small" style="margin:0 0 10px">Kooli sündmused (Suhtlus → Kalender) uuenevad ise iga 3 tunni järel.${c.lastSync ? ` Viimati ${humanDay(new Date(c.lastSync))} kell ${hhmm(new Date(c.lastSync))}.` : ""}</p>`
+        : `<ol class="steps">
+            <li>Ava <a href="https://${esc(school)}.ope.ee/suhtlus/" target="_blank" rel="noopener">Stuudium → Suhtlus</a> → <b>Kalender</b>.</li>
+            <li>Kalendri seadetes vali <b>„Kalendri voog“</b> (iCal) ja vajuta <b>„Genereeri aadress“</b>.</li>
+            <li>Kopeeri aadress ja kleebi siia.</li>
+          </ol>`
+    }
+    <form class="composer" id="stucal-form" autocomplete="off">
+      <input class="input" id="stucal-url" value="${esc(c.url || "")}" placeholder="Kalendri voo aadress (https://… või webcal://…)" inputmode="url" />
+      <button class="btn primary" type="submit">${stuCalBusy ? "…" : c.url ? "Uuenda" : "Lisa"}</button>
+    </form>
+    ${c.error ? `<p class="error">${esc(stuCalErrorText(c.error))}</p>` : ""}
+  </section>`;
+}
+
+function bindStuCal() {
+  document.getElementById("stucal-form")?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const url = document.getElementById("stucal-url").value.trim();
+    if (!url) {
+      state.stuCal = null;
+      save();
+      return render();
+    }
+    if (!/^(https?|webcal):\/\//i.test(url)) return toast("Kleebi täielik aadress (algab https:// või webcal://)");
+    state.stuCal = { ...(state.stuCal || {}), url, error: null };
+    save();
+    stuCalSync();
+  });
+}
+
+// «Homme koolis» / «Täna koolis» — школьные события дня (Homme, Praegu).
+function schoolEventsCardHtml(day, title) {
+  const events = daySchoolEvents(dateKey(day));
+  if (!events.length) return "";
+  return `<section class="card"><h2>${title}</h2><ul class="gcal-list">${events.map((e) => gcalEventHtml({ ...e, source: "" })).join("")}</ul></section>`;
 }
 
 function handleCalendarAction(action, btn) {

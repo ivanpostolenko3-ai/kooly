@@ -4,4 +4,4 @@ compatibility_date = "2026-10-01"
 
 [vars]
 # Сайты, страницы которых можно читать через /page (через запятую). Поддомены разрешены автоматически.
-ALLOWED_SITES = "nerg.ee"
+ALLOWED_SITES = "nerg.ee,ope.ee,stuudium.com"

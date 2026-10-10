@@ -123,6 +123,7 @@ const DEFAULT_STATE = {
   stuudium: null, // { school, status, lastSync, error, count, mode }
   proxyUrl: null, // адрес облачного посредника (Cloudflare Worker) для телефона
   gcal: null, // Google Kalender: { clientId, calendarId, push, pull, events, … } — см. calendar.js
+  stuCal: null, // Stuudiumi kalender (Suhtlus): { url, events, lastSync, error } — iCal-лента
   fired: {}, // { "2026-10-12": ["key", …] } — какие уведомления уже показаны
 };
 
@@ -569,6 +570,7 @@ function renderNow(force = false) {
   view.innerHTML = `
     ${hero}
     ${nextCard}
+    ${schoolEventsCardHtml(now, "Täna koolis")}
     ${st.lessons.length && now.getHours() < 14 ? lunchCardHtml(now, "Tänane lõuna") : ""}
     ${st.lessons.length ? `<section class="card"><h2>Täna, ${DAYS[now.getDay()]}</h2>${lessonListHtml(st.lessons, now)}</section>` : ""}
     <section class="card">
@@ -604,6 +606,7 @@ function renderTomorrow() {
         <div class="hero-sub">${plural(lessons.length, "tund", "tundi")} · algus kell ${hhmm(lessons[0].start)}</div>
       </div>
     </section>
+    ${schoolEventsCardHtml(day, "Koolis")}
     ${lunchCardHtml(day, "Lõuna")}
     <section class="card">
       <h2>Ranits <span class="counter">${done}/${all.length}</span></h2>
@@ -912,7 +915,7 @@ function renderSettings() {
   const body = {
     schedule: schedulePageHtml,
     items: itemsPageHtml,
-    stuudium: () => (hasServer ? stuudiumCardHtml() : stuudiumPhoneHtml()),
+    stuudium: () => (hasServer ? stuudiumCardHtml() : stuudiumPhoneHtml()) + stuCalCardHtml(),
     menu: () => (hasProxy() ? "" : proxyHintHtml("Menüü")) + menuPageHtml(),
     connection: connectionPageHtml,
     gcal: gcalPageHtml,
@@ -923,6 +926,7 @@ function renderSettings() {
   view.innerHTML = head + body;
   if (settingsPage === "items") bindItemsPage();
   if (settingsPage === "menu") bindMenuPage();
+  if (settingsPage === "stuudium") bindStuCal();
   if (settingsPage === "connection" && !hasServer) bindConnectionPage();
 }
 
@@ -1501,7 +1505,9 @@ document.addEventListener("visibilitychange", () => {
   if (hasServer) stuudiumAutoSync();
   menuAutoSync();
   edupageAutoSync();
+  stuCalAutoSync();
 });
 if (hasServer) stuudiumAutoSync();
 menuAutoSync();
 edupageAutoSync();
+stuCalAutoSync();
