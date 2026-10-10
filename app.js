@@ -664,12 +664,34 @@ function taskCardHtml(t, now = new Date()) {
         ${dl && !t.done ? `<span class="task-left ${leftClass(left)}" data-deadline="${+dl.at}">${formatLeft(left)}</span>` : ""}
       </div>
       <div class="task-title">${esc(title)}</div>
-      ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ""}
-      ${(t.links || []).length ? `<div class="task-links">${t.links.map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener">${esc(l.text)}</a>`).join("")}</div>` : ""}
+      ${descriptionText(t) ? `<div class="task-desc">${esc(descriptionText(t))}</div>` : ""}
+      ${(t.links || []).length ? `<div class="task-links">${t.links.map((l) => `<a href="${esc(l.href)}" target="_blank" rel="noopener">${esc(linkLabel(l))}</a>`).join("")}</div>` : ""}
       <div class="task-when">${when}${t.source === "stuudium" ? " · Stuudium" : ""}</div>
     </div>
     <button class="icon-btn task-x" data-action="delete-task" aria-label="Kustuta">${ICONS.close}</button>
   </li>`;
+}
+
+// Ссылка-адрес показывается коротко — названием сайта («docs.google.com»), а не всем URL.
+const URL_RE = /https?:\/\/\S+/g;
+
+function linkLabel(link) {
+  // В Stuudium текст ссылки бывает склеен с адресом: «Tera: Inspiratsioonipäevikhttps://…» — адрес убираем.
+  const text = (link.text || "").replace(URL_RE, "").trim();
+  if (text) return text;
+  try {
+    return new URL(link.href).hostname.replace(/^www\./, "");
+  } catch {
+    return text || "link";
+  }
+}
+
+// Адреса ссылок в описании не показываем — они уже есть кнопками ниже.
+function descriptionText(t) {
+  if (!t.description) return "";
+  const lines = t.description.split("\n").map((l) => (t.links?.length ? l.replace(URL_RE, "") : l).trim());
+  const labels = new Set((t.links || []).map(linkLabel));
+  return lines.filter((l) => l && !labels.has(l)).join("\n");
 }
 
 function taskListHtml(tasks, now = new Date()) {

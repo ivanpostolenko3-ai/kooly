@@ -230,6 +230,7 @@ svg.i {
   margin: 0 auto;
   padding: 8px 16px calc(112px + var(--safe-bottom));
   display: grid;
+  grid-template-columns: minmax(0, 1fr); /* колонка не шире экрана, даже если внутри длинная ссылка */
   gap: 14px;
 }
 
@@ -1392,6 +1393,7 @@ select.input option {
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -1419,6 +1421,7 @@ select.input option {
   flex: 1;
   min-width: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 4px;
   padding-right: 22px;
 }
@@ -1500,6 +1503,10 @@ select.input option {
 }
 
 .task-links a {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   padding: 3px 10px;
   border-radius: 99px;
   background: var(--mint);
