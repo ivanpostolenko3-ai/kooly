@@ -1,0 +1,14 @@
+# Личные данные — только на этом Mac, никогда не публикуются
+.stuudium-profile/
+.stuudium-*.html
+*.json.bak
+
+# Служебные файлы сервера
+.server.pid
+.server.log
+__pycache__/
+
+# macOS / редакторы
+.DS_Store
+.vscode/
+.claude/
