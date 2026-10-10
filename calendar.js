@@ -658,6 +658,10 @@ function gcalPageHtml() {
     </details>`;
 
   const builtIn = Boolean(KOOLY_GOOGLE_CLIENT_ID);
+  // Google не пускает вход внутри встроенных окон приложений — в приложении для iPhone это пока недоступно.
+  if (hasNative && !g.granted) {
+    return `<section class="card"><p class="muted small" style="margin:0">Google ei luba sisse logida rakenduse sees olevas aknas. Google Kalendri ühendamine tuleb rakendusse järgmises versioonis — seni kasuta Kooly Safari-versiooni (${esc(location.host)}).</p></section>`;
+  }
   if (!g.granted) {
     return `${builtIn ? "" : setup}
       <section class="card">

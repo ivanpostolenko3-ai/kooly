@@ -1,0 +1,472 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		080F7FE86AE8469F3B036451 /* KoolyActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C862781ADFAB13CF46B821 /* KoolyActivity.swift */; };
+		0A485F149DC7B4DF5A3299AF /* KoolyShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5493847F5E8EFAA1F0860CF /* KoolyShared.swift */; };
+		2180300EA2E7B0C1F758F2F9 /* Stuudium.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F62EE5056FD40DB280C3E1D /* Stuudium.swift */; };
+		23A1AC9D74B61D66892ED9FE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A025B2D7B21CCDAB63EB841 /* Assets.xcassets */; };
+		270F17B967D221705CB98B19 /* KoolyShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5493847F5E8EFAA1F0860CF /* KoolyShared.swift */; };
+		38C9255336B18300CDA4AE5B /* KoolyWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 439C7D148CCFB4DE879A3AB4 /* KoolyWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		397A7CA3CEFC42D986A42041 /* NativeBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D3ACFBA426B4399ECA5D077 /* NativeBridge.swift */; };
+		5E2435324F05EF4B01693D57 /* KoolyWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD3E31148E2865C1286BC3A9 /* KoolyWebView.swift */; };
+		8B440D390140B2E2EB987DC2 /* KoolyActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C862781ADFAB13CF46B821 /* KoolyActivity.swift */; };
+		8F41CE87729A9C1120504CC6 /* KoolyWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81FB4D49818AAECBA7156348 /* KoolyWidgets.swift */; };
+		B6002C9BBAC0D796E54C4848 /* KoolyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B22660786903227AB618680 /* KoolyApp.swift */; };
+		EEA2ADC1C667E96118AB3EA5 /* Native.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA6E1DA854A6A56340F451FD /* Native.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D5B87088830BED3EF7618604 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 21D5A8AEF75CE0FFE4AECF04 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = E524BCB7C298843D91E90240;
+			remoteInfo = KoolyWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		1AA56A53690D469A8048C295 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				38C9255336B18300CDA4AE5B /* KoolyWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		159D67DCB23013488261D6D0 /* KoolyWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KoolyWidgets.entitlements; sourceTree = "<group>"; };
+		1A025B2D7B21CCDAB63EB841 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		293BB4FD6BB8A1A50A60AC25 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		2B22660786903227AB618680 /* KoolyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KoolyApp.swift; sourceTree = "<group>"; };
+		439C7D148CCFB4DE879A3AB4 /* KoolyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KoolyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		45B87C0BC77F323CFA430DAC /* Kooly.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kooly.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4D3ACFBA426B4399ECA5D077 /* NativeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridge.swift; sourceTree = "<group>"; };
+		5F62EE5056FD40DB280C3E1D /* Stuudium.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stuudium.swift; sourceTree = "<group>"; };
+		81FB4D49818AAECBA7156348 /* KoolyWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KoolyWidgets.swift; sourceTree = "<group>"; };
+		B5493847F5E8EFAA1F0860CF /* KoolyShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KoolyShared.swift; sourceTree = "<group>"; };
+		B7C862781ADFAB13CF46B821 /* KoolyActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KoolyActivity.swift; sourceTree = "<group>"; };
+		BD3E31148E2865C1286BC3A9 /* KoolyWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KoolyWebView.swift; sourceTree = "<group>"; };
+		BD72664049C7E817397717D0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		CDD5184EC51FE7EE54451767 /* Kooly.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Kooly.entitlements; sourceTree = "<group>"; };
+		FA6E1DA854A6A56340F451FD /* Native.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		00B033B7C23168E4868393F5 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				B7C862781ADFAB13CF46B821 /* KoolyActivity.swift */,
+				B5493847F5E8EFAA1F0860CF /* KoolyShared.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		264AD002282048164E2AF9CB = {
+			isa = PBXGroup;
+			children = (
+				6D4C2AEEEB10DD1B22B0C0B4 /* App */,
+				00B033B7C23168E4868393F5 /* Shared */,
+				D0024667747E65EAD4978DF5 /* Widgets */,
+				3B1A6419ED4653859D646724 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		3B1A6419ED4653859D646724 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				45B87C0BC77F323CFA430DAC /* Kooly.app */,
+				439C7D148CCFB4DE879A3AB4 /* KoolyWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		6D4C2AEEEB10DD1B22B0C0B4 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				1A025B2D7B21CCDAB63EB841 /* Assets.xcassets */,
+				BD72664049C7E817397717D0 /* Info.plist */,
+				CDD5184EC51FE7EE54451767 /* Kooly.entitlements */,
+				2B22660786903227AB618680 /* KoolyApp.swift */,
+				BD3E31148E2865C1286BC3A9 /* KoolyWebView.swift */,
+				FA6E1DA854A6A56340F451FD /* Native.swift */,
+				4D3ACFBA426B4399ECA5D077 /* NativeBridge.swift */,
+				5F62EE5056FD40DB280C3E1D /* Stuudium.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		D0024667747E65EAD4978DF5 /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				293BB4FD6BB8A1A50A60AC25 /* Info.plist */,
+				159D67DCB23013488261D6D0 /* KoolyWidgets.entitlements */,
+				81FB4D49818AAECBA7156348 /* KoolyWidgets.swift */,
+			);
+			path = Widgets;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		0D08D2E71FD1D4E8EEF1228E /* Kooly */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CB381DC015D7E2F2B158E93A /* Build configuration list for PBXNativeTarget "Kooly" */;
+			buildPhases = (
+				E2E4CDA6DC66F6D22A746F9B /* Sources */,
+				87F7B4D772552083E3891EAA /* Resources */,
+				1AA56A53690D469A8048C295 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4B91D131C921A89528ABEB89 /* PBXTargetDependency */,
+			);
+			name = Kooly;
+			packageProductDependencies = (
+			);
+			productName = Kooly;
+			productReference = 45B87C0BC77F323CFA430DAC /* Kooly.app */;
+			productType = "com.apple.product-type.application";
+		};
+		E524BCB7C298843D91E90240 /* KoolyWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 87189DB5FA7E3E48F55E8BA3 /* Build configuration list for PBXNativeTarget "KoolyWidgets" */;
+			buildPhases = (
+				A2001853D936E21985D0B7E1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KoolyWidgets;
+			packageProductDependencies = (
+			);
+			productName = KoolyWidgets;
+			productReference = 439C7D148CCFB4DE879A3AB4 /* KoolyWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		21D5A8AEF75CE0FFE4AECF04 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					0D08D2E71FD1D4E8EEF1228E = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+					E524BCB7C298843D91E90240 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 3BDCCFE0738F5FB6EDB223E4 /* Build configuration list for PBXProject "Kooly" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 264AD002282048164E2AF9CB;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 3B1A6419ED4653859D646724 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				0D08D2E71FD1D4E8EEF1228E /* Kooly */,
+				E524BCB7C298843D91E90240 /* KoolyWidgets */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		87F7B4D772552083E3891EAA /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				23A1AC9D74B61D66892ED9FE /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A2001853D936E21985D0B7E1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				080F7FE86AE8469F3B036451 /* KoolyActivity.swift in Sources */,
+				0A485F149DC7B4DF5A3299AF /* KoolyShared.swift in Sources */,
+				8F41CE87729A9C1120504CC6 /* KoolyWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E2E4CDA6DC66F6D22A746F9B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8B440D390140B2E2EB987DC2 /* KoolyActivity.swift in Sources */,
+				B6002C9BBAC0D796E54C4848 /* KoolyApp.swift in Sources */,
+				270F17B967D221705CB98B19 /* KoolyShared.swift in Sources */,
+				5E2435324F05EF4B01693D57 /* KoolyWebView.swift in Sources */,
+				EEA2ADC1C667E96118AB3EA5 /* Native.swift in Sources */,
+				397A7CA3CEFC42D986A42041 /* NativeBridge.swift in Sources */,
+				2180300EA2E7B0C1F758F2F9 /* Stuudium.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		4B91D131C921A89528ABEB89 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = E524BCB7C298843D91E90240 /* KoolyWidgets */;
+			targetProxy = D5B87088830BED3EF7618604 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		18D40DBAC4E0C386626EDB3D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/Kooly.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ee.kooly.ivan.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		47C3449A2C6A1390DAD4E264 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		4F3462F04C13436E867A0DE8 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = App/Kooly.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ee.kooly.ivan.app;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		592BDC2F211195381A4DEA78 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Widgets/KoolyWidgets.entitlements;
+				INFOPLIST_FILE = Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ee.kooly.ivan.app.widgets;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		81EBADDE37D84D1A873A343A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Widgets/KoolyWidgets.entitlements;
+				INFOPLIST_FILE = Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = ee.kooly.ivan.app.widgets;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		D312BE0BE30D1A68BDF0A711 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3BDCCFE0738F5FB6EDB223E4 /* Build configuration list for PBXProject "Kooly" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				47C3449A2C6A1390DAD4E264 /* Debug */,
+				D312BE0BE30D1A68BDF0A711 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		87189DB5FA7E3E48F55E8BA3 /* Build configuration list for PBXNativeTarget "KoolyWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				592BDC2F211195381A4DEA78 /* Debug */,
+				81EBADDE37D84D1A873A343A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CB381DC015D7E2F2B158E93A /* Build configuration list for PBXNativeTarget "Kooly" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4F3462F04C13436E867A0DE8 /* Debug */,
+				18D40DBAC4E0C386626EDB3D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 21D5A8AEF75CE0FFE4AECF04 /* Project object */;
+}
