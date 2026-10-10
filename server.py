@@ -43,6 +43,8 @@ STUUDIUM_COOKIES = os.path.join(STUUDIUM_PROFILE, "kooly-session.json")
 # Копии страниц Stuudium (только на этом Mac) — по ним настраивается разбор заданий и оценок.
 STUUDIUM_SAMPLE = os.path.join(ROOT, ".stuudium-sample.html")
 STUUDIUM_GRADES_SAMPLE = os.path.join(ROOT, ".stuudium-grades.html")
+# Снимок данных Kooly для таймера в строке меню Mac (mac/KoolyMenu): расписание, звонки, задачи.
+KOOLY_STATE = os.path.join(ROOT, ".kooly-state.json")
 
 # Пересылаем только эти запросы, чтобы сервер не стал открытым прокси.
 EDUPAGE_PATH = re.compile(r"^/api/edupage/([a-z0-9-]{2,63})/(regulartt|ttviewer)/([A-Za-z]{1,40})$")
@@ -552,8 +554,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     # ---------- API ----------
 
     def do_POST(self):
-        length = min(int(self.headers.get("Content-Length") or 0), 10_000)
+        limit = 2_000_000 if self.path == "/api/state" else 10_000
+        length = min(int(self.headers.get("Content-Length") or 0), limit)
         body = self.rfile.read(length)
+
+        if self.path == "/api/state":
+            return self.save_state(body)
 
         match = EDUPAGE_PATH.match(self.path)
         if match and match.group(3) in EDUPAGE_FUNCS:
@@ -614,6 +620,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(payload)
+
+    def save_state(self, body):
+        """Kooly в браузере присылает свои данные — их читает таймер в строке меню Mac. Только с этого компьютера."""
+        if self.client_address[0] not in ("127.0.0.1", "::1"):
+            return self.json(403, {"error": "local-only"})
+        try:
+            json.loads(body)
+        except ValueError:
+            return self.json(400, {"error": "json"})
+        tmp = KOOLY_STATE + ".tmp"
+        with open(tmp, "wb") as f:
+            f.write(body)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, KOOLY_STATE)
+        return self.json(200, {"ok": True})
 
     def school_page(self):
         """HTML страницы сайта школы — разбирает его само приложение (как через облачный Worker)."""

@@ -185,6 +185,27 @@ function save() {
   } catch (e) {
     toast("Andmeid ei õnnestunud seadmesse salvestada");
   }
+  shareState();
+}
+
+// На Mac: отдаём снимок расписания и задач серверу — его читает таймер в строке меню (mac/KoolyMenu).
+let shareTimer = null;
+function shareState() {
+  if (typeof hasServer === "undefined" || !hasServer) return;
+  clearTimeout(shareTimer);
+  shareTimer = setTimeout(() => {
+    const snapshot = {
+      updatedAt: Date.now(),
+      bells: state.bells,
+      schoolDays: state.schoolDays,
+      timetable: state.timetable,
+      subjects: state.subjects.map((s) => ({ id: s.id, name: s.name })),
+      tasks: visibleTasks()
+        .filter((t) => !t.done && t.due)
+        .map((t) => ({ title: t.title || t.text, subject: subjectById(t.subjectId)?.name || t.subjectName || "", due: t.due, kind: t.kind || "" })),
+    };
+    fetch("api/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(snapshot) }).catch(() => {});
+  }, 800);
 }
 
 /* ---------- Aeg ja kuupäevad ---------- */
