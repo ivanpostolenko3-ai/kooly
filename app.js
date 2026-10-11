@@ -339,7 +339,11 @@ function nextLessonDateOf(subjectId, from) {
   return null;
 }
 
+// «Testi taimerit» в настройках: несколько минут Kooly показывает пробный урок, как будто он идёт сейчас.
+let demoLesson = null;
+
 function schoolStatus(now) {
+  if (demoLesson && now < demoLesson.end) return { type: "lesson", lessons: [demoLesson], current: demoLesson, next: null };
   const lessons = lessonsFor(now);
   if (!lessons.length) return { type: "free", lessons };
   const idx = lessons.findIndex((l) => now >= l.start && now < l.end);
@@ -827,8 +831,100 @@ function announceTask(task) {
 /* --- Häälsisestus --- */
 
 let recognition = null;
+let recorder = null;
+let recordTimer = null;
+const MAX_RECORD_SECONDS = 45;
 
-function startVoice() {
+// ИИ-диктовка (как Typeless): записываем голос → облачный посредник (Whisper + Llama) → готовое задание.
+// Говорить можно свободно, по-русски или по-эстонски: «ну короче к пятнице по математике номер 245».
+async function startVoice() {
+  const btn = document.getElementById("mic-btn");
+  const preview = document.getElementById("task-preview");
+  if (recorder) {
+    recorder.stop();
+    return;
+  }
+  const canRecord = navigator.mediaDevices?.getUserMedia && window.MediaRecorder && proxyUrl();
+  if (!canRecord) return startSpeechRecognition();
+
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch {
+    preview.hidden = false;
+    preview.textContent = "Mikrofonile pole ligipääsu. Luba see seadetes (Kooly → Mikrofon).";
+    return;
+  }
+  const type = ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+  const chunks = [];
+  recorder = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+  recorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  recorder.onstop = () => {
+    stream.getTracks().forEach((t) => t.stop());
+    clearInterval(recordTimer);
+    btn.classList.remove("listening");
+    const blob = new Blob(chunks, { type: recorder.mimeType || type || "audio/mp4" });
+    recorder = null;
+    if (blob.size < 1500) {
+      preview.textContent = "Liiga lühike — hoia mikrofoni all ja räägi.";
+      return;
+    }
+    sendVoice(blob);
+  };
+  recorder.start();
+  btn.classList.add("listening");
+  const started = Date.now();
+  preview.hidden = false;
+  const tick = () => {
+    const secs = Math.floor((Date.now() - started) / 1000);
+    preview.textContent = `🎙 Kuulan… ${Math.floor(secs / 60)}:${pad(secs % 60)} — räägi vabalt, vajuta uuesti, kui valmis`;
+    if (secs >= MAX_RECORD_SECONDS && recorder) recorder.stop();
+  };
+  tick();
+  recordTimer = setInterval(tick, 250);
+}
+
+async function sendVoice(blob) {
+  const btn = document.getElementById("mic-btn");
+  const preview = document.getElementById("task-preview");
+  const now = new Date();
+  const context = { today: dateKey(now), weekday: DAYS[now.getDay()], subjects: state.subjects.map((s) => s.name) };
+  btn?.classList.add("thinking");
+  if (preview) preview.textContent = "✨ Mõtlen…";
+  try {
+    const res = await fetch(`${proxyUrl().replace(/\/+$/, "")}/voice`, {
+      method: "POST",
+      headers: { "Content-Type": blob.type || "audio/mp4", "X-Kooly-Context": encodeURIComponent(JSON.stringify(context)) },
+      body: blob,
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const subject = data.subject ? state.subjects.find((s) => s.name === data.subject) : null;
+    let due = data.due || null;
+    let auto = false;
+    if (!due && subject) {
+      const d = nextLessonDateOf(subject.id, now); // срок не назван — на ближайший урок этого предмета
+      if (d) {
+        due = dateKey(d);
+        auto = true;
+      }
+    }
+    const task = { id: newId(), done: false, text: data.title, title: data.title, subjectId: subject?.id || null, due, auto, kind: data.kind || "", spoken: data.text };
+    state.tasks.push(task);
+    save();
+    announceTask(task);
+  } catch (e) {
+    if (preview) {
+      preview.hidden = false;
+      preview.textContent = e.message === "no-speech" ? "Ei kuulnud midagi — proovi uuesti." : "Ei õnnestunud. Proovi uuesti või kirjuta ülesanne.";
+    }
+  } finally {
+    document.getElementById("mic-btn")?.classList.remove("thinking");
+  }
+}
+
+// Запасной вариант без посредника: распознавание речи браузера (если оно есть).
+function startSpeechRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const btn = document.getElementById("mic-btn");
   const input = document.getElementById("task-input");
@@ -1152,7 +1248,43 @@ function notifyPageHtml() {
         <input class="input time-input" type="time" value="${state.bagTime}" data-field="bag-time" />
       </div>
     </section>
-    <p class="page-lead">iPhone'is töötavad teavitused, kui Kooly on lisatud avaekraanile (iOS 16.4+) ja on avatud või hiljuti taustale viidud.</p>`;
+    <p class="page-lead">${hasNative ? "Teavitused tulevad ka siis, kui Kooly on suletud." : "iPhone'is töötavad teavitused, kui Kooly on lisatud avaekraanile (iOS 16.4+) ja on avatud või hiljuti taustale viidud."}</p>
+    <section class="card">
+      <h2>Proovi</h2>
+      <p class="muted small" style="margin:0 0 12px">Vaata juba enne tundi, kuidas taimer ja teavitused välja näevad.</p>
+      <div class="actions" style="margin-top:0">
+        <button class="btn small primary" data-action="test-timer">Testi taimerit (2 min)</button>
+        <button class="btn small" data-action="test-notification">Testi teavitust</button>
+      </div>
+      <p class="muted small" style="margin:12px 0 0">${
+        hasNative
+          ? "Pärast „Testi taimerit“ mine avaekraanile või lukusta telefon: taimer on Dynamic Islandil, lukustuskuval ja Kooly vidinas."
+          : "Taimer ilmub vahekaardile „Praegu“. Dynamic Island ja vidinad töötavad Kooly rakenduses."
+      }</p>
+    </section>`;
+}
+
+function testTimer() {
+  const now = new Date();
+  demoLesson = { n: 1, subject: { id: "demo", name: "Proovitund", items: [] }, room: "101", start: new Date(+now - 60000), end: new Date(+now + 2 * 60000) };
+  if (hasNative) nativePost({ type: "test-timer", minutes: 2 });
+  toast(hasNative ? "Taimer käivitatud — vaata Dynamic Islandi ja lukustuskuva" : "Taimer käivitatud — vaata vahekaarti „Praegu“");
+  setTimeout(() => {
+    demoLesson = null;
+    if (currentTab === "now") renderNow(true);
+  }, 2 * 60000 + 500);
+  if (!hasNative) switchTab("now");
+}
+
+async function testNotification() {
+  if (hasNative) {
+    nativePost({ type: "test-notification" });
+    return toast("Teavitus tuleb 5 sekundi pärast — võid Kooly sulgeda");
+  }
+  if (!("Notification" in window)) return toast("See brauser ei toeta teavitusi. Kasuta Kooly rakendust.");
+  if (Notification.permission !== "granted" && (await Notification.requestPermission()) !== "granted") return toast("Teavitused on keelatud");
+  toast("Teavitus tuleb 5 sekundi pärast");
+  setTimeout(() => notify("Kooly test 🔔", "Nii näevad välja Kooly teavitused.", "now"), 5000);
 }
 
 function lookPageHtml() {
@@ -1250,6 +1382,8 @@ document.addEventListener("click", (e) => {
   if (!btn) return;
   const action = btn.dataset.action;
   if (action === "open-settings") return openSettings(btn.dataset.page || null);
+  if (action === "test-timer") return testTimer();
+  if (action === "test-notification") return testNotification();
   if (action === "settings-back") return openSettings(null);
   if (action === "open-subject" || action === "close-subject") {
     progressSubject = action === "open-subject" ? btn.dataset.name : null;

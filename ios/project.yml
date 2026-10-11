@@ -33,6 +33,7 @@ targets:
         UIBackgroundModes: [fetch]
         BGTaskSchedulerPermittedIdentifiers: [ee.kooly.refresh]
         ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Kooly kuulab sind, kui vajutad mikrofoni ja dikteerid ülesande.
     entitlements:
       path: App/Kooly.entitlements
       properties:

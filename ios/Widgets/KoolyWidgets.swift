@@ -21,6 +21,7 @@ struct KoolyWidgetBundle: WidgetBundle {
 struct ScheduleEntry: TimelineEntry {
     let date: Date
     let snapshot: Snapshot?
+    var demo: DemoLesson? = nil
 }
 
 struct ScheduleProvider: TimelineProvider {
@@ -33,6 +34,12 @@ struct ScheduleProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<ScheduleEntry>) -> Void) {
         let now = Date()
         let snapshot = KoolyShared.loadSnapshot()
+        if let demo = KoolyShared.loadDemo() {
+            // Пробный урок: показываем его, а после конца — обычное расписание.
+            let entries = [ScheduleEntry(date: now, snapshot: snapshot, demo: demo), ScheduleEntry(date: demo.end, snapshot: snapshot)]
+            completion(Timeline(entries: entries, policy: .after(demo.end.addingTimeInterval(60))))
+            return
+        }
         var dates = [now]
         if let snapshot { dates += Schedule.boundaries(from: now, days: 2, in: snapshot) }
         let entries = dates.prefix(60).map { ScheduleEntry(date: $0, snapshot: snapshot) }
@@ -59,7 +66,9 @@ struct ScheduleWidgetView: View {
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
-        if let snapshot = entry.snapshot {
+        if let demo = entry.demo, entry.date < demo.end {
+            timerView(title: demo.title, detail: "ruum \(demo.room)", start: demo.start, end: demo.end, isLesson: true)
+        } else if let snapshot = entry.snapshot {
             content(Schedule.status(at: entry.date, in: snapshot), snapshot)
         } else {
             Text("Ava Kooly").font(.caption)

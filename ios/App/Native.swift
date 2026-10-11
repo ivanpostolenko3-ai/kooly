@@ -11,9 +11,34 @@ import WidgetKit
 final class LiveActivityManager {
     static let shared = LiveActivityManager()
     private var timer: Timer?
+    private var testUntil = Date.distantPast
+
+    /// «Testi taimerit»: пробный урок на несколько минут — Dynamic Island, экран блокировки и виджет.
+    func test(minutes: Double) {
+        timer?.invalidate()
+        let now = Date()
+        let end = now.addingTimeInterval(minutes * 60)
+        testUntil = end
+        KoolyShared.saveDemo(DemoLesson(title: "Proovitund", room: "101", start: now.addingTimeInterval(-60), end: end))
+        WidgetCenter.shared.reloadAllTimelines()
+        let state = KoolyActivityAttributes.ContentState(isLesson: true, title: "Proovitund", detail: "Test · ruum 101 · siis Matemaatika",
+                                                         start: now.addingTimeInterval(-60), end: end)
+        Task {
+            for a in Activity<KoolyActivityAttributes>.activities { await a.end(nil, dismissalPolicy: .immediate) }
+            _ = try? Activity.request(attributes: KoolyActivityAttributes(), content: ActivityContent(state: state, staleDate: end), pushType: nil)
+        }
+        // Когда пробный урок кончится — вернуть обычное расписание.
+        timer = Timer.scheduledTimer(withTimeInterval: minutes * 60 + 2, repeats: false) { _ in
+            Task { @MainActor in
+                WidgetCenter.shared.reloadAllTimelines()
+                LiveActivityManager.shared.update(KoolyShared.loadSnapshot())
+            }
+        }
+    }
 
     /// Показать текущий урок/перемену; до первого и после последнего урока — убрать.
     func update(_ snapshot: Snapshot?) {
+        if Date() < testUntil { return } // идёт пробный урок — не мешаем
         timer?.invalidate()
         guard let snapshot, ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let now = Date()
@@ -44,24 +69,24 @@ final class LiveActivityManager {
     }
 }
 
-#if DEBUG
-extension LiveActivityManager {
-    /// Только для проверки в симуляторе (аргумент запуска -koolyDemoActivity): урок «Inglise keel», 35 минут до перемены.
-    func demo() {
-        let now = Date()
-        let state = KoolyActivityAttributes.ContentState(isLesson: true, title: "Inglise keel", detail: "2. tund · ruum 304 · siis Eesti keel",
-                                                         start: now.addingTimeInterval(-35 * 60), end: now.addingTimeInterval(35 * 60))
-        Task {
-            for a in Activity<KoolyActivityAttributes>.activities { await a.end(nil, dismissalPolicy: .immediate) }
-            _ = try? Activity.request(attributes: KoolyActivityAttributes(), content: ActivityContent(state: state, staleDate: nil), pushType: nil)
-        }
-    }
-}
-#endif
-
 // MARK: - Уведомления iOS (приходят и при закрытом Kooly)
 
 enum NotificationScheduler {
+    /// «Testi teavitust»: пробное уведомление через 5 секунд (если нужно — сначала спросить разрешение).
+    static func test() {
+        let center = UNUserNotificationCenter.current()
+        Task {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound, .badge])
+            let content = UNMutableNotificationContent()
+            content.title = "Kooly test 🔔"
+            content.body = "Nii näevad välja Kooly teavitused: tunni algus, ranits ja tähtajad."
+            content.sound = .default
+            content.userInfo = ["tab": "now"]
+            try? await center.add(UNNotificationRequest(identifier: "kooly-test-\(Date().timeIntervalSince1970)", content: content,
+                                                        trigger: UNTimeIntervalNotificationTrigger(timeInterval: 5, repeats: false)))
+        }
+    }
+
     /// Веб-часть заранее считает уведомления на 3 дня вперёд (уроки, ранец, сроки заданий) — ставим их в iOS.
     static func schedule(_ snapshot: Snapshot) {
         let center = UNUserNotificationCenter.current()

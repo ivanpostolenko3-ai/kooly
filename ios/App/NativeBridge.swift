@@ -41,11 +41,7 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
             KoolyShared.saveSnapshot(data)
             WidgetCenter.shared.reloadAllTimelines()
             let parsed = KoolyShared.loadSnapshot()
-            #if DEBUG
-            if !ProcessInfo.processInfo.arguments.contains("-koolyDemoActivity") { LiveActivityManager.shared.update(parsed) }
-            #else
             LiveActivityManager.shared.update(parsed)
-            #endif
             if let parsed { NotificationScheduler.schedule(parsed) }
         case "notify-permission":
             Task {
@@ -55,6 +51,11 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
         case "stuudium-login":
             if let s = body["school"] as? String, !s.isEmpty { setSchool(s) }
             showStuudiumLogin = true
+        case "test-timer":
+            let minutes = (body["minutes"] as? Double) ?? 2
+            LiveActivityManager.shared.test(minutes: minutes)
+        case "test-notification":
+            NotificationScheduler.test()
         case "log":
             NSLog("KoolyWeb: %@", body["msg"] as? String ?? "")
         case "stuudium-sync":
@@ -96,12 +97,6 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
 
     /// Открыли Kooly: обновить Dynamic Island и, если давно не обновлялись, домашку из Stuudium.
     func appBecameActive() {
-        #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("-koolyDemoActivity") {
-            LiveActivityManager.shared.demo()
-            return
-        }
-        #endif
         LiveActivityManager.shared.update(KoolyShared.loadSnapshot())
         if stuudiumConnected, Date().timeIntervalSince(lastStuudiumSync) > 30 * 60 {
             // Даём веб-части загрузиться, потом тихо обновляем.

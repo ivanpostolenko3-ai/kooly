@@ -15,6 +15,17 @@ enum KoolyShared {
     }
 
     static var snapshotURL: URL { containerURL.appendingPathComponent("snapshot.json") }
+    static var demoURL: URL { containerURL.appendingPathComponent("demo.json") }
+
+    /// «Testi taimerit»: пробный урок на пару минут — его показывают виджеты и Dynamic Island.
+    static func loadDemo() -> DemoLesson? {
+        guard let data = try? Data(contentsOf: demoURL), let demo = try? JSONDecoder().decode(DemoLesson.self, from: data) else { return nil }
+        return demo.end > Date() ? demo : nil
+    }
+
+    static func saveDemo(_ demo: DemoLesson) {
+        if let data = try? JSONEncoder().encode(demo) { try? data.write(to: demoURL, options: .atomic) }
+    }
 
     static func loadSnapshot() -> Snapshot? {
         guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
@@ -24,6 +35,13 @@ enum KoolyShared {
     static func saveSnapshot(_ data: Data) {
         try? data.write(to: snapshotURL, options: .atomic)
     }
+}
+
+struct DemoLesson: Codable {
+    let title: String
+    let room: String
+    let start: Date
+    let end: Date
 }
 
 // MARK: - Снимок данных Kooly (то, что присылает shareState() в app.js)

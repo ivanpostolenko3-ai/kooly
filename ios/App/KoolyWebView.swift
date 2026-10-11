@@ -86,6 +86,12 @@ struct KoolyWebView: UIViewRepresentable {
         }
         #endif
 
+        // Микрофон для ИИ-диктовки — только странице Kooly (iOS сама спросит разрешение в первый раз).
+        func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo,
+                     type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+            decisionHandler(origin.host == KoolyShared.siteURL.host ? .grant : .deny)
+        }
+
         // Если веб-процесс выгрузили из памяти — просто перезагрузить.
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
             webView.reload()

@@ -2298,3 +2298,15 @@ select.input option {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+.mic.thinking {
+  background: var(--accent);
+  color: var(--on-accent);
+  animation: spin-soft 1.2s linear infinite;
+}
+
+@keyframes spin-soft {
+  50% {
+    transform: scale(0.9) rotate(8deg);
+  }
+}
