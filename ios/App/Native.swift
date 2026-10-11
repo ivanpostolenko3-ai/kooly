@@ -44,6 +44,21 @@ final class LiveActivityManager {
     }
 }
 
+#if DEBUG
+extension LiveActivityManager {
+    /// Только для проверки в симуляторе (аргумент запуска -koolyDemoActivity): урок «Inglise keel», 35 минут до перемены.
+    func demo() {
+        let now = Date()
+        let state = KoolyActivityAttributes.ContentState(isLesson: true, title: "Inglise keel", detail: "2. tund · ruum 304 · siis Eesti keel",
+                                                         start: now.addingTimeInterval(-35 * 60), end: now.addingTimeInterval(35 * 60))
+        Task {
+            for a in Activity<KoolyActivityAttributes>.activities { await a.end(nil, dismissalPolicy: .immediate) }
+            _ = try? Activity.request(attributes: KoolyActivityAttributes(), content: ActivityContent(state: state, staleDate: nil), pushType: nil)
+        }
+    }
+}
+#endif
+
 // MARK: - Уведомления iOS (приходят и при закрытом Kooly)
 
 enum NotificationScheduler {

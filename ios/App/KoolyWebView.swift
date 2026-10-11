@@ -25,6 +25,12 @@ struct KoolyWebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = false
         #if DEBUG
         if #available(iOS 16.4, *) { webView.isInspectable = true }
+        // Ошибки JavaScript — в журнал приложения (только в отладочной сборке).
+        let logger = """
+        window.addEventListener("error", (e) => window.webkit.messageHandlers.kooly.postMessage({ type: "log", msg: "JS error: " + e.message + " @ " + e.filename + ":" + e.lineno }));
+        window.addEventListener("unhandledrejection", (e) => window.webkit.messageHandlers.kooly.postMessage({ type: "log", msg: "JS rejection: " + (e.reason && (e.reason.stack || e.reason.message) || e.reason) }));
+        """
+        config.userContentController.addUserScript(WKUserScript(source: logger, injectionTime: .atDocumentStart, forMainFrameOnly: true))
         #endif
 
         let refresh = UIRefreshControl()
@@ -63,6 +69,22 @@ struct KoolyWebView: UIViewRepresentable {
             if let url = action.request.url { open(url, from: webView) }
             return nil
         }
+
+        #if DEBUG
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            webView.evaluateJavaScript("[location.href, document.getElementById('view') ? document.getElementById('view').innerHTML.length : -1, innerWidth, innerHeight].join(' | ')") { r, e in
+                NSLog("KoolyWeb: loaded frame=%@ page=%@ err=%@", NSCoder.string(for: webView.frame), String(describing: r), String(describing: e))
+            }
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            NSLog("KoolyWeb: didFail %@", error.localizedDescription)
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            NSLog("KoolyWeb: didFailProvisional %@", error.localizedDescription)
+        }
+        #endif
 
         // Если веб-процесс выгрузили из памяти — просто перезагрузить.
         func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
