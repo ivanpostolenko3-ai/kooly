@@ -75,6 +75,11 @@ struct KoolyWebView: UIViewRepresentable {
             webView.evaluateJavaScript("[location.href, document.getElementById('view') ? document.getElementById('view').innerHTML.length : -1, innerWidth, innerHeight].join(' | ')") { r, e in
                 NSLog("KoolyWeb: loaded frame=%@ page=%@ err=%@", NSCoder.string(for: webView.frame), String(describing: r), String(describing: e))
             }
+            // Только для проверки в симуляторе: аргумент запуска -koolyEval "<JS>" выполняется после загрузки.
+            let args = ProcessInfo.processInfo.arguments
+            if let i = args.firstIndex(of: "-koolyEval"), i + 1 < args.count {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { webView.evaluateJavaScript(args[i + 1]) }
+            }
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
