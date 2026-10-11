@@ -390,6 +390,11 @@ function handleCalendarAction(action, btn) {
 
 /* ---------- Событие календаря из задания ---------- */
 
+// Постоянный ключ задания для Google: у домашки из Stuudium он одинаковый на всех устройствах.
+function taskKey(t) {
+  return t.extId || `kooly:${t.id}`;
+}
+
 function taskSubjectName(t) {
   return (t.subjectId && subjectById(t.subjectId)?.name) || t.subjectName || "";
 }
@@ -615,13 +620,48 @@ async function gcalSync({ interactive = false, quiet = false } = {}) {
       pageToken = page.nextPageToken || "";
     } while (pageToken);
 
-    const byTask = new Map();
+    // Наши события (созданные Kooly) и чужие. Наше событие узнаём по ключу задания, а не по пометке в Kooly:
+    // так дублей не будет, даже если Kooly забыл связь (новый календарь, другое устройство, переустановка).
+    const ours = [];
     const external = [];
     for (const ev of events) {
-      const taskId = ev.extendedProperties?.private?.koolyTask;
-      if (taskId) byTask.set(taskId, ev);
+      const p = ev.extendedProperties?.private || {};
+      if (p.koolyKey || p.koolyTask) ours.push(ev);
       else if (ev.status !== "cancelled") external.push(ev);
     }
+    const eventKey = (ev) => ev.extendedProperties.private.koolyKey || `kooly:${ev.extendedProperties.private.koolyTask}`;
+    const looksSame = (ev) => `${cleanSummary(ev.summary || "")}|${eventStartDate(ev)}`; // для старых дублей без ключа
+
+    // 1б. Уборка уже созданных дублей: одинаковый ключ или одинаковые название и день — оставляем одно событие.
+    const linkedIds = new Set(state.tasks.map((t) => t.gcal?.id).filter(Boolean));
+    const keep = new Map();
+    const duplicates = [];
+    for (const ev of ours.filter((e) => e.status !== "cancelled")) {
+      for (const k of [`key:${eventKey(ev)}`, `same:${looksSame(ev)}`]) {
+        const kept = keep.get(k);
+        if (!kept) {
+          keep.set(k, ev);
+        } else if (kept !== ev) {
+          // Оставляем то, на которое уже ссылается задание Kooly; иначе — первое.
+          const [stay, drop] = linkedIds.has(ev.id) && !linkedIds.has(kept.id) ? [ev, kept] : [kept, ev];
+          keep.set(k, stay);
+          if (!duplicates.includes(drop)) duplicates.push(drop);
+        }
+      }
+    }
+    for (const ev of duplicates) {
+      try {
+        await gapi(`/calendars/${cal}/events/${encodeURIComponent(ev.id)}`, { method: "DELETE" });
+      } catch (e) {
+        if (e.status !== 404 && e.status !== 410) throw e;
+      }
+      ev.status = "cancelled";
+      ev.koolyDuplicate = true;
+    }
+    const alive = ours.filter((e) => !e.koolyDuplicate);
+    const byKey = new Map(alive.map((ev) => [eventKey(ev), ev]));
+    const byId = new Map(alive.map((ev) => [ev.id, ev]));
+    const bySame = new Map(alive.filter((e) => e.status !== "cancelled").map((ev) => [looksSame(ev), ev]));
 
     // 2. Удалённые в Kooly задания — удаляем их события.
     for (const id of g.deletes || []) {
@@ -637,11 +677,17 @@ async function gcalSync({ interactive = false, quiet = false } = {}) {
     const fromKeyStr = dateKey(from), toKeyStr = dateKey(to);
     for (const t of state.tasks) {
       if (t.dismissed || !t.due || t.due < fromKeyStr || t.due > toKeyStr || t.gcal?.removed) continue;
-      const ev = t.gcal?.id ? byTask.get(t.id) : null;
-      if (t.gcal?.id && ev?.status === "cancelled") {
-        t.gcal.removed = true; // удалили в Google — больше не создаём
-        continue;
+      const key = taskKey(t);
+      // Ищем уже существующее событие: по ключу, по сохранённой связи или по тому же названию в тот же день.
+      let ev = byKey.get(key) || (t.gcal?.id && byId.get(t.gcal.id)) || bySame.get(looksSame({ summary: taskEvent(t).summary, start: taskEvent(t).start }));
+      if (ev?.status === "cancelled") {
+        if (ev.koolyDuplicate) ev = null;
+        else {
+          t.gcal = { ...(t.gcal || {}), id: ev.id, removed: true }; // удалили в Google — больше не создаём
+          continue;
+        }
       }
+      if (ev && !t.gcal?.id) t.gcal = { id: ev.id, etag: ev.etag, sig: null }; // нашли своё событие — привязываем, не создаём новое
       if (ev && ev.etag !== t.gcal.etag) {
         // Изменили в Google → переносим в Kooly название и дату.
         const title = cleanSummary(ev.summary || "");
@@ -655,15 +701,18 @@ async function gcalSync({ interactive = false, quiet = false } = {}) {
         continue;
       }
       if (!g.push) continue;
-      const body = { ...taskEvent(t), extendedProperties: { private: { koolyTask: t.id } } };
+      const body = { ...taskEvent(t), extendedProperties: { private: { koolyTask: t.id, koolyKey: key } } };
       const sig = eventSig(body);
-      if (ev && t.gcal?.sig === sig) continue; // ничего не поменялось
+      const hasKey = ev?.extendedProperties?.private?.koolyKey === key;
+      if (ev && t.gcal?.sig === sig && hasKey) continue; // ничего не поменялось
       const saved = ev
         ? await gapi(`/calendars/${cal}/events/${encodeURIComponent(ev.id)}`, { method: "PATCH", body })
         : await gapi(`/calendars/${cal}/events`, { method: "POST", body });
       t.gcal = { id: saved.id, etag: saved.etag, sig };
+      byKey.set(key, saved); // если то же задание встретится дважды — не создаём второе событие
       pushed++;
     }
+    g.removedDuplicates = duplicates.length;
 
     // 4. Свои события Google — для календаря Kooly.
     g.events = external.map((ev) => {
@@ -681,7 +730,8 @@ async function gcalSync({ interactive = false, quiet = false } = {}) {
     });
     g.lastSync = Date.now();
     g.error = null;
-    if (!quiet) toast(`Google Kalender sünkroonitud${pushed ? ` · saadetud ${pushed}` : ""}${pulled ? ` · muudetud ${pulled}` : ""}`);
+    const cleaned = g.removedDuplicates || 0;
+    if (!quiet || cleaned) toast(`Google Kalender sünkroonitud${pushed ? ` · saadetud ${pushed}` : ""}${pulled ? ` · muudetud ${pulled}` : ""}${cleaned ? ` · eemaldatud ${plural(cleaned, "korduv sündmus", "korduvat sündmust")}` : ""}`);
   } catch (e) {
     console.warn("gcal sync", e);
     g.error = e.message;
