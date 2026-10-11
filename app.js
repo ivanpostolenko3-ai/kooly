@@ -1677,8 +1677,10 @@ document.addEventListener("visibilitychange", () => {
   menuAutoSync();
   edupageAutoSync();
   stuCalAutoSync();
+  gcalStartupSync();
 });
 if (hasServer) stuudiumAutoSync();
 menuAutoSync();
 edupageAutoSync();
 stuCalAutoSync();
+setTimeout(gcalStartupSync, 2000);

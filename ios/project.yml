@@ -34,6 +34,9 @@ targets:
         BGTaskSchedulerPermittedIdentifiers: [ee.kooly.refresh]
         ITSAppUsesNonExemptEncryption: false
         NSMicrophoneUsageDescription: Kooly kuulab sind, kui vajutad mikrofoni ja dikteerid ülesande.
+        CFBundleURLTypes:
+          - CFBundleURLName: google-signin
+            CFBundleURLSchemes: [com.googleusercontent.apps.810943360481-n6o6utir2h1nl2614cvcfno1fp1augi5]
     entitlements:
       path: App/Kooly.entitlements
       properties:

@@ -51,6 +51,24 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
         case "stuudium-login":
             if let s = body["school"] as? String, !s.isEmpty { setSchool(s) }
             showStuudiumLogin = true
+        case "gcal-token":
+            let id = body["id"] as? String ?? ""
+            let interactive = body["interactive"] as? Bool ?? false
+            Task {
+                var result: [String: Any]
+                do {
+                    let (token, expiresIn) = try await GoogleAuth.shared.token(interactive: interactive)
+                    result = ["token": token, "expiresIn": expiresIn]
+                } catch let error as GoogleAuthError {
+                    result = ["error": error.rawValue]
+                } catch {
+                    result = ["error": "network"]
+                }
+                webView?.callAsyncJavaScript("window.koolyNativeGoogleToken && window.koolyNativeGoogleToken(id, result)",
+                                             arguments: ["id": id, "result": result], in: nil, in: .page) { _ in }
+            }
+        case "gcal-signout":
+            GoogleAuth.shared.signOut()
         case "test-timer":
             let minutes = (body["minutes"] as? Double) ?? 2
             LiveActivityManager.shared.test(minutes: minutes)

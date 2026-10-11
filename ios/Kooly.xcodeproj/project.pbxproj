@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		080F7FE86AE8469F3B036451 /* KoolyActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7C862781ADFAB13CF46B821 /* KoolyActivity.swift */; };
 		0A485F149DC7B4DF5A3299AF /* KoolyShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5493847F5E8EFAA1F0860CF /* KoolyShared.swift */; };
+		11E6ECEFAD3D9C2A55145D66 /* GoogleAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336B44D2550461EAAC8A35D0 /* GoogleAuth.swift */; };
 		2180300EA2E7B0C1F758F2F9 /* Stuudium.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F62EE5056FD40DB280C3E1D /* Stuudium.swift */; };
 		23A1AC9D74B61D66892ED9FE /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1A025B2D7B21CCDAB63EB841 /* Assets.xcassets */; };
 		270F17B967D221705CB98B19 /* KoolyShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5493847F5E8EFAA1F0860CF /* KoolyShared.swift */; };
@@ -50,6 +51,7 @@
 		1A025B2D7B21CCDAB63EB841 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		293BB4FD6BB8A1A50A60AC25 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2B22660786903227AB618680 /* KoolyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KoolyApp.swift; sourceTree = "<group>"; };
+		336B44D2550461EAAC8A35D0 /* GoogleAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleAuth.swift; sourceTree = "<group>"; };
 		439C7D148CCFB4DE879A3AB4 /* KoolyWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = KoolyWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		45B87C0BC77F323CFA430DAC /* Kooly.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Kooly.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D3ACFBA426B4399ECA5D077 /* NativeBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeBridge.swift; sourceTree = "<group>"; };
@@ -96,6 +98,7 @@
 			isa = PBXGroup;
 			children = (
 				1A025B2D7B21CCDAB63EB841 /* Assets.xcassets */,
+				336B44D2550461EAAC8A35D0 /* GoogleAuth.swift */,
 				BD72664049C7E817397717D0 /* Info.plist */,
 				CDD5184EC51FE7EE54451767 /* Kooly.entitlements */,
 				2B22660786903227AB618680 /* KoolyApp.swift */,
@@ -222,6 +225,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				11E6ECEFAD3D9C2A55145D66 /* GoogleAuth.swift in Sources */,
 				8B440D390140B2E2EB987DC2 /* KoolyActivity.swift in Sources */,
 				B6002C9BBAC0D796E54C4848 /* KoolyApp.swift in Sources */,
 				270F17B967D221705CB98B19 /* KoolyShared.swift in Sources */,

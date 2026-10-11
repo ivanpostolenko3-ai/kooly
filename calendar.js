@@ -466,9 +466,39 @@ function loadGis() {
   });
 }
 
-// interactive — по нажатию кнопки (Google откроет окно входа). Без нажатия — только пока жив прежний токен.
+// В приложении для iPhone вход делает сама iOS (системное окно Google), токен приходит сюда.
+const nativeTokenRequests = new Map();
+window.koolyNativeGoogleToken = (id, result) => {
+  const request = nativeTokenRequests.get(id);
+  nativeTokenRequests.delete(id);
+  if (!request) return;
+  if (result?.error) request.reject(new Error(result.error));
+  else request.resolve(result);
+};
+
+function nativeGoogleToken(interactive) {
+  return new Promise((resolve, reject) => {
+    const id = newId();
+    nativeTokenRequests.set(id, { resolve, reject });
+    nativePost({ type: "gcal-token", id, interactive });
+    setTimeout(() => {
+      if (!nativeTokenRequests.has(id)) return;
+      nativeTokenRequests.delete(id);
+      reject(new Error(interactive ? "popup_closed" : "need-login"));
+    }, interactive ? 300000 : 20000);
+  });
+}
+
+// interactive — по нажатию кнопки (Google откроет окно входа). Без нажатия — только пока жив прежний токен
+// (в приложении — ещё и по сохранённому ключу, так что календарь обновляется сам).
 async function gcalAccessToken(interactive) {
   if (gcalToken && Date.now() < gcalTokenExp) return gcalToken;
+  if (hasNative) {
+    const r = await nativeGoogleToken(interactive);
+    gcalToken = r.token;
+    gcalTokenExp = Date.now() + (Number(r.expiresIn) - 60) * 1000;
+    return gcalToken;
+  }
   if (!interactive) throw new Error("need-login");
   await loadGis();
   if (!gcalClient) {
@@ -554,7 +584,8 @@ async function gcalCreateCalendar() {
 function gcalDisconnect() {
   if (!confirm("Kas katkestada ühendus Google Kalendriga? Google'is olevad sündmused jäävad alles.")) return;
   try {
-    if (gcalToken) google.accounts.oauth2.revoke(gcalToken, () => {});
+    if (hasNative) nativePost({ type: "gcal-signout" });
+    else if (gcalToken) google.accounts.oauth2.revoke(gcalToken, () => {});
   } catch {
     // токен всё равно забываем
   }
@@ -752,6 +783,12 @@ function gcalAutoSync() {
   gcalAutoTimer = setTimeout(() => gcalSync({ quiet: true }), 2500);
 }
 
+// В приложении: при каждом открытии Kooly тихо синхронизируем календарь (вход хранится в iOS).
+function gcalStartupSync() {
+  const g = state.gcal;
+  if (hasNative && g?.granted && g.calendarId && Date.now() - (g.lastSync || 0) > 10 * 60 * 1000) gcalSync({ quiet: true });
+}
+
 function gcalForgetTask(t) {
   if (!t?.gcal?.id || !state.gcal) return;
   state.gcal.deletes = [...(state.gcal.deletes || []), t.gcal.id];
@@ -778,10 +815,6 @@ function gcalPageHtml() {
     </details>`;
 
   const builtIn = Boolean(KOOLY_GOOGLE_CLIENT_ID);
-  // Google не пускает вход внутри встроенных окон приложений — в приложении для iPhone это пока недоступно.
-  if (hasNative && !g.granted) {
-    return `<section class="card"><p class="muted small" style="margin:0">Google ei luba sisse logida rakenduse sees olevas aknas. Google Kalendri ühendamine tuleb rakendusse järgmises versioonis — seni kasuta Kooly Safari-versiooni (${esc(location.host)}).</p></section>`;
-  }
   if (!g.granted) {
     return `${builtIn ? "" : setup}
       <section class="card">
@@ -816,7 +849,7 @@ function gcalPageHtml() {
       </div>
       ${g.lastSync ? `<p class="muted small" style="margin:10px 0 0">Viimati ${humanDay(new Date(g.lastSync))} kell ${hhmm(new Date(g.lastSync))}</p>` : ""}
     </section>
-    <p class="page-lead">Soovitus: kasuta eraldi kalendrit „Kooly“ — siis on kooliasjad omaette ja neid saab Google'is ühe klikiga peita. Google'i luba kehtib tund aega; pärast seda vajuta „Sünkrooni“.</p>
+    <p class="page-lead">Soovitus: kasuta eraldi kalendrit „Kooly“ — siis on kooliasjad omaette ja neid saab Google'is ühe klikiga peita. ${hasNative ? "Kalender uueneb ise iga kord, kui avad Kooly." : "Google'i luba kehtib tund aega; pärast seda vajuta „Sünkrooni“."}</p>
     ${builtIn ? "" : setup}`;
 }
 
