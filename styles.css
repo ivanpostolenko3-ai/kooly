@@ -2078,6 +2078,15 @@ select.input option {
 
 .cal {
   padding: 14px 12px;
+  overflow: hidden; /* при свайпе месяц уезжает за край карточки */
+  touch-action: pan-y; /* вертикально — прокрутка страницы, горизонтально — листание месяцев */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.cal-grid,
+.cal-head b {
+  will-change: transform;
 }
 
 .cal-head {

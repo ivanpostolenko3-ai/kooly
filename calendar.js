@@ -22,6 +22,8 @@ const GCAL_FUTURE_DAYS = 120;
 
 let calMonth = null; // первый день показываемого месяца
 let calSelected = null; // выбранный день (YYYY-MM-DD)
+let calSlideFrom = 0; // откуда въезжает новый месяц: 1 — справа (следующий), -1 — слева (предыдущий)
+let calSwipedAt = 0; // время последнего свайпа — чтобы после него не срабатывало нажатие на день
 let gcalToken = null;
 let gcalTokenExp = 0;
 let gcalClient = null;
@@ -126,6 +128,73 @@ function renderCalendar() {
     <div class="actions" style="justify-content:center">
       <button class="btn small" data-action="ics-export">Lisa kõik kalendrisse (.ics)</button>
     </div>`;
+  bindCalendarSwipe();
+}
+
+/* ---------- Свайп месяцев влево-вправо, как в Google Календаре ---------- */
+
+function changeMonth(step) {
+  calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + step, 1);
+  calSlideFrom = step;
+  render();
+}
+
+function bindCalendarSwipe() {
+  const card = view.querySelector(".cal");
+  const grid = card?.querySelector(".cal-grid");
+  const title = card?.querySelector(".cal-head b");
+  if (!grid) return;
+  const moving = [grid, title];
+  const setX = (x, opacity, transition) =>
+    moving.forEach((el) => {
+      el.style.transition = transition;
+      el.style.transform = x ? `translateX(${x})` : "";
+      el.style.opacity = opacity;
+    });
+
+  // Новый месяц въезжает с той стороны, куда листали.
+  if (calSlideFrom) {
+    const from = calSlideFrom;
+    calSlideFrom = 0;
+    setX(`${from * 40}%`, "0", "none");
+    requestAnimationFrame(() => requestAnimationFrame(() => setX("", "", "transform 0.22s ease-out, opacity 0.22s ease-out")));
+  }
+
+  let x0 = 0, y0 = 0, dx = 0, width = 1, active = false, horizontal = null;
+  card.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    x0 = e.touches[0].clientX;
+    y0 = e.touches[0].clientY;
+    dx = 0;
+    width = card.clientWidth || 1;
+    active = true;
+    horizontal = null;
+  }, { passive: true });
+
+  card.addEventListener("touchmove", (e) => {
+    if (!active) return;
+    dx = e.touches[0].clientX - x0;
+    const dy = e.touches[0].clientY - y0;
+    if (horizontal === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) horizontal = Math.abs(dx) > Math.abs(dy);
+    if (!horizontal) return;
+    e.preventDefault(); // листаем месяц, а не страницу
+    setX(`${dx}px`, String(1 - Math.min(Math.abs(dx) / width, 0.6)), "none"); // месяц едет за пальцем
+  }, { passive: false });
+
+  const finish = () => {
+    if (!active) return;
+    active = false;
+    if (horizontal && Math.abs(dx) > Math.min(60, width * 0.18)) {
+      const step = dx < 0 ? 1 : -1; // влево — следующий месяц, вправо — предыдущий
+      calSwipedAt = Date.now();
+      setX(`${-step * 60}%`, "0", "transform 0.16s ease-in, opacity 0.16s ease-in");
+      setTimeout(() => changeMonth(step), 150);
+    } else if (horizontal) {
+      setX("", "", "transform 0.2s ease-out, opacity 0.2s ease-out"); // не дотянули — месяц возвращается
+    }
+  };
+  card.addEventListener("touchend", finish);
+  card.addEventListener("touchcancel", finish);
 }
 
 function gcalEventHtml(e) {
@@ -293,11 +362,12 @@ function schoolEventsCardHtml(day, title) {
 
 function handleCalendarAction(action, btn) {
   if (action === "cal-pick") {
+    if (Date.now() - calSwipedAt < 400) return; // это был свайп, а не нажатие на день
     calSelected = btn.dataset.day;
     const d = fromKey(calSelected);
     calMonth = new Date(d.getFullYear(), d.getMonth(), 1);
   } else if (action === "cal-month") {
-    calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + Number(btn.dataset.step), 1);
+    return changeMonth(Number(btn.dataset.step));
   } else if (action === "cal-today") {
     const now = new Date();
     calSelected = dateKey(now);
