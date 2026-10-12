@@ -16,6 +16,12 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
     static let shared = NativeBridge()
 
     @Published var showStuudiumLogin = false
+    /// Kooly отрисовался (веб-часть прислала «ready») — до этого показываем заставку, а не белый экран.
+    @Published var webReady = false
+    /// Не удалось загрузить ни с сайта, ни из сохранённой копии — экран «Ühendus puudub».
+    @Published var offline = false
+    private var triedCache = false
+    private var loadTimer: Timer?
     @Published private(set) var school = UserDefaults.standard.string(forKey: "stuudiumSchool") ?? "narvaeesti"
 
     weak var webView: WKWebView?
@@ -74,6 +80,8 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
             LiveActivityManager.shared.test(minutes: minutes)
         case "test-notification":
             NotificationScheduler.test()
+        case "ready":
+            markReady()
         case "log":
             NSLog("KoolyWeb: %@", body["msg"] as? String ?? "")
         case "stuudium-sync":
@@ -87,6 +95,51 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
     private func setSchool(_ s: String) {
         school = s
         UserDefaults.standard.set(s, forKey: "stuudiumSchool")
+    }
+
+    // MARK: Загрузка Kooly
+
+    /// Загрузить Kooly с сайта (свежая версия). Если сайт не ответит — сохранённая копия.
+    func loadSite(fromCache: Bool = false) {
+        guard let webView else { return }
+        webReady = false
+        offline = false
+        triedCache = fromCache
+        webView.load(URLRequest(url: KoolyShared.siteURL,
+                                cachePolicy: fromCache ? .returnCacheDataElseLoad : .reloadRevalidatingCacheData,
+                                timeoutInterval: fromCache ? 30 : 12))
+        loadTimer?.invalidate()
+        loadTimer = Timer.scheduledTimer(withTimeInterval: 20, repeats: false) { _ in
+            Task { @MainActor in
+                guard !NativeBridge.shared.webReady else { return }
+                NativeBridge.shared.loadFailed()
+            }
+        }
+    }
+
+    func markReady() {
+        webReady = true
+        offline = false
+        loadTimer?.invalidate()
+    }
+
+    func loadFailed() {
+        guard !webReady else { return }
+        if !triedCache {
+            loadSite(fromCache: true)
+        } else {
+            loadTimer?.invalidate()
+            offline = true
+        }
+    }
+
+    /// Вернулись в приложение: если iOS успела выгрузить страницу (пусто) — загрузить заново.
+    private func reloadIfBlank() {
+        guard let webView else { return }
+        webView.evaluateJavaScript("document.getElementById('view') ? document.getElementById('view').childElementCount : 0") { [weak self] result, error in
+            guard let self else { return }
+            if error != nil || (result as? Int ?? 0) == 0 { self.loadSite() }
+        }
     }
 
     // MARK: Stuudium
@@ -115,6 +168,7 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
 
     /// Открыли Kooly: обновить Dynamic Island и, если давно не обновлялись, домашку из Stuudium.
     func appBecameActive() {
+        if webReady { reloadIfBlank() }
         LiveActivityManager.shared.update(KoolyShared.loadSnapshot())
         if stuudiumConnected, Date().timeIntervalSince(lastStuudiumSync) > 30 * 60 {
             // Даём веб-части загрузиться, потом тихо обновляем.

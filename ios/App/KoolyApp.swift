@@ -33,11 +33,51 @@ struct ContentView: View {
         ZStack {
             Color("LaunchBackground").ignoresSafeArea()
             KoolyWebView(bridge: bridge).ignoresSafeArea()
+                .opacity(bridge.webReady ? 1 : 0)
+            if !bridge.webReady {
+                SplashView(offline: bridge.offline) { bridge.loadSite() }
+                    .transition(.opacity)
+            }
             // Невидимая страница Stuudium: через неё приложение забирает домашку и оценки.
             StuudiumFetcherView(fetcher: bridge.fetcher).frame(width: 1, height: 1).opacity(0.01).allowsHitTesting(false)
         }
         .sheet(isPresented: $bridge.showStuudiumLogin) {
             StuudiumLoginView(school: bridge.school) { bridge.stuudiumLoggedIn() }
+        }
+    }
+}
+
+/// Заставка, пока Kooly загружается, и экран «нет связи» — вместо белого экрана.
+struct SplashView: View {
+    let offline: Bool
+    let retry: () -> Void
+    @State private var showSpinner = false
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Text("K")
+                .font(.system(size: 44, weight: .heavy, design: .rounded))
+                .foregroundStyle(Color(red: 1, green: 0.78, blue: 0.21))
+                .frame(width: 88, height: 88)
+                .background(Color(red: 0, green: 0.31, blue: 0.36), in: UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 22, bottomTrailingRadius: 22, topTrailingRadius: 40))
+            Text("Kooly").font(.title2.weight(.heavy)).foregroundStyle(Color(red: 0, green: 0.31, blue: 0.36))
+            if offline {
+                Text("Ühendus puudub. Kontrolli internetti.")
+                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                Button(action: retry) {
+                    Text("Proovi uuesti").font(.headline).padding(.horizontal, 22).padding(.vertical, 12)
+                        .background(Color(red: 0, green: 0.31, blue: 0.36), in: Capsule()).foregroundStyle(.white)
+                }
+            } else if showSpinner {
+                ProgressView().tint(Color(red: 0, green: 0.31, blue: 0.36))
+            }
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color("LaunchBackground"))
+        .task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            showSpinner = true
         }
     }
 }

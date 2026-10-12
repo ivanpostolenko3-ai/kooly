@@ -1666,6 +1666,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
 save();
 applyTheme();
 render();
+if (hasNative) nativePost({ type: "ready" }); // приложение для iPhone убирает заставку
 setInterval(() => {
   tick();
   if (state.notify) checkNotifications(new Date());

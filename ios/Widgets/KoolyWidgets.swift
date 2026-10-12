@@ -110,7 +110,7 @@ struct ScheduleWidgetView: View {
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).font(.headline).lineLimit(1)
-                Text(timerInterval: start...end, countsDown: true).font(.title2.weight(.bold)).monospacedDigit()
+                Text(timerInterval: start...end, countsDown: true).font(.title2.weight(.bold)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                 Text(detail).font(.caption2).lineLimit(1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -121,6 +121,7 @@ struct ScheduleWidgetView: View {
                 Spacer(minLength: 0)
                 Text(timerInterval: start...end, countsDown: true)
                     .font(.system(size: 34, weight: .heavy, design: .rounded)).monospacedDigit()
+                    .lineLimit(1).minimumScaleFactor(0.5)
                     .foregroundStyle(isLesson ? brand : .primary)
                 ProgressView(timerInterval: start...end, countsDown: false).tint(accent).labelsHidden()
                 Text(detail).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -159,6 +160,8 @@ struct KoolyLiveActivityWidget: Widget {
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
             let s = context.state
+            // Больше часа — таймер вида 1:03:12, ему нужно больше места (иначе iOS обрезает его до «1:03…»).
+            let long = s.end.timeIntervalSince(s.start) > 3600
             return DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
                     Label(s.title, systemImage: s.isLesson ? "book.fill" : "figure.walk")
@@ -167,7 +170,8 @@ struct KoolyLiveActivityWidget: Widget {
                 DynamicIslandExpandedRegion(.trailing) {
                     Text(timerInterval: s.start...s.end, countsDown: true)
                         .font(.title2.weight(.bold)).monospacedDigit().foregroundStyle(accent)
-                        .multilineTextAlignment(.trailing).frame(maxWidth: 90)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                        .multilineTextAlignment(.trailing).frame(width: long ? 112 : 80, alignment: .trailing)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 6) {
@@ -179,11 +183,13 @@ struct KoolyLiveActivityWidget: Widget {
                 Image(systemName: s.isLesson ? "book.fill" : "figure.walk").foregroundStyle(accent)
             } compactTrailing: {
                 Text(timerInterval: s.start...s.end, countsDown: true)
-                    .monospacedDigit().foregroundStyle(accent)
-                    .multilineTextAlignment(.trailing).frame(maxWidth: 48)
+                    .font(.system(size: 15, weight: .semibold)).monospacedDigit().foregroundStyle(accent)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .multilineTextAlignment(.trailing).frame(width: long ? 62 : 44, alignment: .trailing)
             } minimal: {
                 Text(timerInterval: s.start...s.end, countsDown: true)
-                    .monospacedDigit().font(.caption2).foregroundStyle(accent).frame(maxWidth: 40)
+                    .font(.system(size: 11, weight: .semibold)).monospacedDigit().foregroundStyle(accent)
+                    .lineLimit(1).minimumScaleFactor(0.6).multilineTextAlignment(.center).frame(width: 40)
             }
         }
     }
@@ -200,9 +206,12 @@ struct LockScreenActivityView: View {
                 Text(state.detail).font(.caption).foregroundStyle(.white.opacity(0.75)).lineLimit(1)
                 ProgressView(timerInterval: state.start...state.end, countsDown: false).tint(accent).labelsHidden()
             }
+            // Таймер всегда в одну строку: для уроков дольше часа (1:09:42) — шире и чуть мельче.
+            let long = state.end.timeIntervalSince(state.start) > 3600
             Text(timerInterval: state.start...state.end, countsDown: true)
-                .font(.system(size: 36, weight: .heavy, design: .rounded)).monospacedDigit()
-                .foregroundStyle(accent).multilineTextAlignment(.trailing).frame(width: 110, alignment: .trailing)
+                .font(.system(size: long ? 30 : 36, weight: .heavy, design: .rounded)).monospacedDigit()
+                .foregroundStyle(accent).lineLimit(1).minimumScaleFactor(0.6)
+                .multilineTextAlignment(.trailing).frame(width: long ? 146 : 110, alignment: .trailing)
         }
         .padding(16)
     }

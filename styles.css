@@ -2310,3 +2310,28 @@ select.input option {
     transform: scale(0.9) rotate(8deg);
   }
 }
+
+/* ---------- Как приложение, а не сайт ---------- */
+
+html {
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation; /* без зума двойным касанием */
+  overscroll-behavior: none; /* без «резинки» за краем страницы */
+}
+
+body {
+  overflow-x: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none; /* без меню «Скопировать» при долгом нажатии */
+}
+
+input,
+textarea,
+select,
+.task-title,
+.task-desc,
+.gcomment {
+  -webkit-user-select: text;
+  user-select: text;
+}
