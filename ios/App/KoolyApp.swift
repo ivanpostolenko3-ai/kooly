@@ -54,22 +54,27 @@ struct SplashView: View {
     @State private var showSpinner = false
 
     var body: some View {
-        VStack(spacing: 18) {
-            // Тот же значок, что на экране запуска iOS, — переход без мигания.
-            Image("LaunchLogo").resizable().frame(width: 200, height: 200)
-            if offline {
-                Text("Ühendus puudub. Kontrolli internetti.")
-                    .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button(action: retry) {
-                    Text("Proovi uuesti").font(.headline).padding(.horizontal, 22).padding(.vertical, 12)
-                        .background(Color(red: 0, green: 0.31, blue: 0.36), in: Capsule()).foregroundStyle(.white)
+        // Значок ровно в центре всего экрана (без учёта чёлки и полоски) — там же, где на экране запуска iOS,
+        // поэтому переход незаметен. Индикатор и кнопка — под значком и не сдвигают его.
+        Image("LaunchLogo").resizable().frame(width: 200, height: 200)
+            .overlay(alignment: .top) {
+                VStack(spacing: 18) {
+                    if offline {
+                        Text("Ühendus puudub. Kontrolli internetti.")
+                            .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        Button(action: retry) {
+                            Text("Proovi uuesti").font(.headline).padding(.horizontal, 22).padding(.vertical, 12)
+                                .background(Color(red: 0, green: 0.31, blue: 0.36), in: Capsule()).foregroundStyle(.white)
+                        }
+                    } else if showSpinner {
+                        ProgressView().tint(Color(red: 0, green: 0.31, blue: 0.36))
+                    }
                 }
-            } else if showSpinner {
-                ProgressView().tint(Color(red: 0, green: 0.31, blue: 0.36))
+                .fixedSize()
+                .offset(y: 200 + 24)
             }
-        }
-        .padding(32)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
         .background(Color("LaunchBackground"))
         .task {
             try? await Task.sleep(nanoseconds: 1_200_000_000)
