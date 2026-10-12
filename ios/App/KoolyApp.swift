@@ -55,12 +55,8 @@ struct SplashView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            Text("K")
-                .font(.system(size: 44, weight: .heavy, design: .rounded))
-                .foregroundStyle(Color(red: 1, green: 0.78, blue: 0.21))
-                .frame(width: 88, height: 88)
-                .background(Color(red: 0, green: 0.31, blue: 0.36), in: UnevenRoundedRectangle(topLeadingRadius: 22, bottomLeadingRadius: 22, bottomTrailingRadius: 22, topTrailingRadius: 40))
-            Text("Kooly").font(.title2.weight(.heavy)).foregroundStyle(Color(red: 0, green: 0.31, blue: 0.36))
+            // Тот же значок, что на экране запуска iOS, — переход без мигания.
+            Image("LaunchLogo").resizable().frame(width: 200, height: 200)
             if offline {
                 Text("Ühendus puudub. Kontrolli internetti.")
                     .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
