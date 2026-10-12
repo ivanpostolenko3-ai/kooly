@@ -5,7 +5,7 @@ cd "$(dirname "$0")/ios" || exit 1
 BUILD="$HOME/Library/Developer/Kooly-build"
 
 echo "🔎 Ищу подключённый iPhone…"
-UDID=$(xcrun devicectl list devices 2>/dev/null | awk '/physical/ && /connected/ {for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) print $i}' | head -1)
+UDID=$(xcrun devicectl list devices 2>/dev/null | awk '/physical/ && (/connected/ || /available/) {for (i=1;i<=NF;i++) if ($i ~ /^[0-9A-F]{8}-[0-9A-F]{16}$/) print $i}' | head -1)
 if [ -z "$UDID" ]; then
   echo "❌ iPhone не найден. Подключи его кабелем, разблокируй и нажми «Доверять», потом запусти снова."
   read -n 1 -s -r -p "Нажми любую клавишу, чтобы закрыть…"; exit 1
@@ -14,7 +14,7 @@ echo "📱 iPhone: $UDID"
 
 echo "🛠  Собираю Kooly (1–2 минуты)…"
 if ! xcodebuild -project Kooly.xcodeproj -scheme Kooly -configuration Release \
-     -destination "id=$UDID" -derivedDataPath "$BUILD" -allowProvisioningUpdates build -quiet; then
+     -destination "generic/platform=iOS" -derivedDataPath "$BUILD" -allowProvisioningUpdates build -quiet; then
   echo "❌ Сборка не удалась. Открой Xcode → Settings → Accounts и проверь, что Apple ID на месте."
   read -n 1 -s -r -p "Нажми любую клавишу, чтобы закрыть…"; exit 1
 fi
