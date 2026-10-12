@@ -56,7 +56,7 @@ struct SplashView: View {
     var body: some View {
         // Значок ровно в центре всего экрана (без учёта чёлки и полоски) — там же, где на экране запуска iOS,
         // поэтому переход незаметен. Индикатор и кнопка — под значком и не сдвигают его.
-        Image("LaunchLogo").resizable().frame(width: 200, height: 200)
+        Image("KoolyLogo").resizable().frame(width: 200, height: 200)
             .overlay(alignment: .top) {
                 VStack(spacing: 18) {
                     if offline {
