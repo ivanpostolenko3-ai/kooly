@@ -3,8 +3,8 @@
 // передаёт ходы и считает, сколько людей ждёт и играет. Правила игр проверяют сами клиенты (games-rules.js),
 // сервер только соединяет и хранит список ходов, чтобы после обрыва связи игру можно было продолжить.
 //
-// Клиент → сервер: hello {pid, nick} · find {game} · cancel · move {m} · end · resign · emote {e}
-// Сервер → клиент: stats {online, games} · waiting {game} · matched {room, game, seat, opp} · resume {…, moves}
+// Клиент → сервер: hello {pid, nick, avatar?} · avatar {a} · find {game} · cancel · move {m} · end · resign · emote {e}
+// Сервер → клиент: stats {online, games} · waiting {game} · matched {room, game, seat, opp, oppAvatar} · resume {…, moves}
 //                  move {m} · opp-away · opp-back · opp-left {reason} · emote {e} · error {code}
 
 import { DurableObject } from "cloudflare:workers";
@@ -13,6 +13,9 @@ export const GAMES = ["chess", "checkers", "tictactoe", "battleship"];
 const AWAY_GRACE = 90_000; // соперник пропал (закрыл приложение) — ждём его полторы минуты, потом победа
 const MAX_MOVES = 3000;
 const EMOTES = 6;
+// Фото профиля: маленький JPEG 96×96, который приложение само уменьшает (обычно 3–6 КБ).
+const MAX_AVATAR = 16_000;
+const validAvatar = (a) => typeof a === "string" && a.length <= MAX_AVATAR && /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(a);
 
 // Грубые слова в никах (ru/et/en, корни) — проверяется и в приложении.
 const BAD = /(хуй|хуе|хуё|пизд|бля|еба|ёба|ебл|сука|залуп|мудак|пидор|пидар|гандон|fuck|shit|bitch|cunt|nigg|fag|dick|pussy|türa|tura|munn|perse|vitt|lits|pede|hoor)/i;
@@ -69,7 +72,7 @@ export class GameLobby extends DurableObject {
   // MARK: Сообщения
 
   async webSocketMessage(ws, raw) {
-    if (typeof raw !== "string" || raw.length > 6000) return;
+    if (typeof raw !== "string" || raw.length > MAX_AVATAR + 2000) return;
     let m;
     try {
       m = JSON.parse(raw);
@@ -96,6 +99,7 @@ export class GameLobby extends DurableObject {
           }
         }
         this.setAtt(ws, { pid, nick, status: "idle", game: null, room: null });
+        await this.saveAvatar(pid, m.avatar);
         this.send(ws, { t: "hi" });
         await this.resume(ws, pid);
         break;
@@ -114,6 +118,9 @@ export class GameLobby extends DurableObject {
         }
         break;
       }
+      case "avatar":
+        await this.saveAvatar(a.pid, m.a);
+        break;
       case "cancel":
         if (a.status === "waiting") this.setAtt(ws, { status: "idle", game: null });
         break;
@@ -183,8 +190,16 @@ export class GameLobby extends DurableObject {
     room.away[seat] = 0;
     await this.ctx.storage.put("r:" + room.id, room);
     this.setAtt(ws, { status: "playing", game: room.game, room: room.id });
-    this.send(ws, { t: "resume", room: room.id, game: room.game, seat, opp: room.nicks[1 - seat], moves: room.moves });
+    const oppAvatar = (await this.ctx.storage.get("a:" + room.pids[1 - seat])) || null;
+    this.send(ws, { t: "resume", room: room.id, game: room.game, seat, opp: room.nicks[1 - seat], oppAvatar, moves: room.moves });
     this.sendTo(room.pids[1 - seat], { t: "opp-back" });
+  }
+
+  // undefined — не трогаем, null/"" — удалить фото, строка — новое фото (если это правда маленькая картинка).
+  async saveAvatar(pid, avatar) {
+    if (avatar === undefined || !pid) return;
+    if (validAvatar(avatar)) await this.ctx.storage.put("a:" + pid, avatar);
+    else if (!avatar) await this.ctx.storage.delete("a:" + pid);
   }
 
   // MARK: Партии
@@ -207,9 +222,11 @@ export class GameLobby extends DurableObject {
       created: Date.now(),
     };
     await this.ctx.storage.put({ ["r:" + room.id]: room, ["p:" + a0.pid]: room.id, ["p:" + a1.pid]: room.id });
+    const avatars = await this.ctx.storage.get(["a:" + a0.pid, "a:" + a1.pid]);
     for (const [seat, ws] of [s0, s1].entries()) {
       this.setAtt(ws, { status: "playing", game, room: room.id });
-      this.send(ws, { t: "matched", room: room.id, game, seat, opp: room.nicks[1 - seat] });
+      const oppAvatar = avatars.get("a:" + room.pids[1 - seat]) || null;
+      this.send(ws, { t: "matched", room: room.id, game, seat, opp: room.nicks[1 - seat], oppAvatar });
     }
   }
 

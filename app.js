@@ -1404,7 +1404,7 @@ function switchTab(tab) {
   window.scrollTo(0, 0);
 }
 
-document.addEventListener("click", (e) => {
+document.addEventListener("click", async (e) => {
   const tab = e.target.closest(".tabbar button");
   if (tab) return switchTab(tab.dataset.tab);
 
@@ -1468,7 +1468,7 @@ document.addEventListener("click", (e) => {
     s.items = s.items.includes(id) ? s.items.filter((x) => x !== id) : [...s.items, id];
   } else if (action === "delete-item") {
     const item = catalogItem(btn.dataset.item);
-    if (!confirm(`Kas kustutada „${item.name}“ kõigilt ainetelt?`)) return;
+    if (!(await askConfirm(`Kas kustutada „${item.name}“ kõigilt ainetelt?`))) return;
     state.catalog = state.catalog.filter((i) => i !== item);
     state.subjects.forEach((s) => (s.items = s.items.filter((id) => id !== item.id)));
   } else if (action === "set-theme") {
@@ -1488,7 +1488,7 @@ document.addEventListener("click", (e) => {
     state.subjects.push({ id: "s" + newId(), name: "Uus aine", items: [], aliases: [] });
   } else if (action === "remove-subject") {
     const s = subjectById(btn.dataset.id);
-    if (!confirm(`Kas kustutada „${s.name}“ kõigist päevadest?`)) return;
+    if (!(await askConfirm(`Kas kustutada „${s.name}“ kõigist päevadest?`))) return;
     state.subjects = state.subjects.filter((x) => x.id !== s.id);
     Object.keys(state.timetable).forEach((d) => (state.timetable[d] = state.timetable[d].map((e) => (entryId(e) === s.id ? null : e))));
   } else if (action === "export") {
@@ -1496,7 +1496,7 @@ document.addEventListener("click", (e) => {
   } else if (action === "import") {
     return importData();
   } else if (action === "reset") {
-    if (!confirm("Kas kustutada kõik ülesanded ja seaded ning taastada näidistunniplaan?")) return;
+    if (!(await askConfirm("Kas kustutada kõik ülesanded ja seaded ning taastada näidistunniplaan?"))) return;
     state = structuredClone(DEFAULT_STATE);
   }
   save();
@@ -1655,6 +1655,30 @@ function tick() {
     });
     renderNow(expired);
   }
+}
+
+// Своё окно «Kas oled kindel?» вместо confirm(): в приложении для iPhone системное окно не показывается
+// и confirm() молча отвечает «нет» — из-за этого не работали «Anna alla», удаление и отключения.
+function askConfirm(text, okLabel = "Jah", danger = true) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement("div");
+    wrap.className = "confirm-backdrop";
+    wrap.innerHTML = `<div class="confirm-box" role="alertdialog" aria-modal="true">
+      <p>${esc(text)}</p>
+      <div class="actions"><button class="btn" data-c="0">Loobu</button><button class="btn ${danger ? "danger" : "primary"}" data-c="1">${esc(okLabel)}</button></div>
+    </div>`;
+    const done = (ok) => {
+      wrap.remove();
+      resolve(ok);
+    };
+    wrap.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const b = e.target.closest("[data-c]");
+      if (b) done(b.dataset.c === "1");
+      else if (e.target === wrap) done(false);
+    });
+    document.body.appendChild(wrap);
+  });
 }
 
 function toast(message, actionLabel, onAction) {

@@ -284,7 +284,7 @@ async function handleStuudiumAction(action) {
   } else if (action === "stuudium-copy-code") {
     copyShortcutCode();
   } else if (action === "stuudium-logout") {
-    if (!confirm("Kas katkestada ühendus Stuudiumiga? Juba laaditud kodutööd jäävad alles.")) return;
+    if (!(await askConfirm("Kas katkestada ühendus Stuudiumiga? Juba laaditud kodutööd jäävad alles.", "Katkesta"))) return;
     try {
       await stuudiumCall("logout", state.stuudium.school);
     } catch {

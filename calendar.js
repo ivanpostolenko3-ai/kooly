@@ -576,8 +576,8 @@ async function gcalCreateCalendar() {
   }
 }
 
-function gcalDisconnect() {
-  if (!confirm("Kas katkestada ühendus Google Kalendriga? Google'is olevad sündmused jäävad alles.")) return;
+async function gcalDisconnect() {
+  if (!(await askConfirm("Kas katkestada ühendus Google Kalendriga? Google'is olevad sündmused jäävad alles.", "Katkesta"))) return;
   try {
     if (hasNative) nativePost({ type: "gcal-signout" });
     else if (gcalToken) google.accounts.oauth2.revoke(gcalToken, () => {});

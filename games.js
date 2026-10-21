@@ -4,7 +4,8 @@
    Mängud — онлайн-игры с учениками своей школы.
    Соединение: WebSocket к облачному посреднику (worker/games.js, лобби на школу).
    Правила — games-rules.js; ход соперника принимается, только если он разрешён правилами.
-   state.games = { nick, school, pid } — pid: случайный id устройства (чтобы вернуться в игру после обрыва).
+   state.games = { nick, school, pid, avatar? } — pid: случайный id устройства (чтобы вернуться в игру после обрыва),
+   avatar: фото профиля, уменьшенное до 96×96 JPEG (data:-ссылка, несколько КБ). Его видит только соперник в партии.
    ========================================================= */
 
 const GAME_SCHOOLS = [{ id: "narvaeesti", name: "Narva Eesti Gümnaasium" }];
@@ -43,6 +44,8 @@ let gRetry = 0;
 let gRetryTimer = null;
 let gIdleTimer = null;
 let gEmoteTimer = null;
+let gPhotoDraft; // фото в форме профиля до «Salvesta»: undefined — не меняли, null — убрали, строка — новое
+let gNickDraft = null; // введённый ник не теряется, пока выбираем фото
 
 /* ---------- Соединение ---------- */
 
@@ -61,7 +64,7 @@ function gamesConnect() {
     return gamesRetry();
   }
   gWs = ws;
-  ws.onopen = () => gSend({ t: "hello", pid: state.games.pid, nick: state.games.nick });
+  ws.onopen = () => gSend({ t: "hello", pid: state.games.pid, nick: state.games.nick, avatar: state.games.avatar || null });
   ws.onmessage = (e) => {
     try {
       gamesMessage(JSON.parse(e.data));
@@ -180,7 +183,7 @@ function gamesMessage(m) {
 function startMatch(m) {
   const resumed = m.t === "resume";
   gWaiting = null;
-  gMatch = { room: m.room, game: m.game, seat: m.seat, opp: m.opp, moves: m.moves || [], over: null, oppAway: false, sel: null, promo: null, sentEnd: false };
+  gMatch = { room: m.room, game: m.game, seat: m.seat, opp: m.opp, oppAvatar: m.oppAvatar || null, moves: m.moves || [], over: null, oppAway: false, sel: null, promo: null, sentEnd: false };
   if (m.game === "battleship") {
     const key = `kooly-bs-${m.room}`;
     let fleet = null;
@@ -322,11 +325,16 @@ function handleGamesAction(action, btn) {
       }
       const school = document.getElementById("g-school")?.value || GAME_SCHOOLS[0].id;
       const changed = state.games?.nick !== r.nick || state.games?.school !== school;
-      state.games = { pid: state.games?.pid || newId() + newId() + Math.random().toString(36).slice(2, 8), nick: r.nick, school };
+      const avatar = gPhotoDraft !== undefined ? gPhotoDraft : state.games?.avatar || null;
+      const avatarChanged = avatar !== (state.games?.avatar || null);
+      state.games = { pid: state.games?.pid || newId() + newId() + Math.random().toString(36).slice(2, 8), nick: r.nick, school, avatar };
       gNickError = "";
       gEditProfile = false;
+      gPhotoDraft = undefined;
+      gNickDraft = null;
       save();
-      if (changed) gamesDisconnect(); // переподключиться с новым ником / в новую школу
+      if (changed) gamesDisconnect(); // переподключиться с новым ником / в новую школу (фото уйдёт в hello)
+      else if (avatarChanged) gSend({ t: "avatar", a: avatar });
       return render();
     }
     case "g-edit-profile":
@@ -335,6 +343,12 @@ function handleGamesAction(action, btn) {
     case "g-cancel-profile":
       gEditProfile = false;
       gNickError = "";
+      gPhotoDraft = undefined;
+      gNickDraft = null;
+      return renderGames();
+    case "g-photo-remove":
+      gNickDraft = document.getElementById("g-nick")?.value ?? gNickDraft;
+      gPhotoDraft = null;
       return renderGames();
     case "g-find":
       gWaiting = btn.dataset.game;
@@ -346,9 +360,11 @@ function handleGamesAction(action, btn) {
       return renderGames();
     case "g-resign":
       if (!g || g.over) return;
-      if (!confirm("Kas annad alla? Vastane võidab.")) return;
-      gSend({ t: "resign" });
-      return finishMatch({ win: false, text: "Andsid alla" });
+      return askConfirm("Kas annad alla? Vastane võidab.", "Anna alla").then((ok) => {
+        if (!ok || gMatch !== g || g.over) return; // пока думали, партия могла закончиться
+        gSend({ t: "resign" });
+        finishMatch({ win: false, text: "Andsid alla" });
+      });
     case "g-again": {
       const game = g?.game;
       gMatch = null;
@@ -436,6 +452,47 @@ function showEmote(e, mine = false) {
   gamesRerender();
 }
 
+/* ---------- Фото профиля ---------- */
+
+// Квадрат по центру фото → 96×96 JPEG. Так фото весит несколько КБ и быстро доходит до соперника.
+function shrinkPhoto(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const size = 96, side = Math.min(img.naturalWidth, img.naturalHeight);
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = size;
+      canvas.getContext("2d").drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      resolve(canvas.toDataURL("image/jpeg", 0.8));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image"));
+    };
+    img.src = url;
+  });
+}
+
+document.addEventListener("change", async (e) => {
+  if (e.target.id !== "g-photo" || !e.target.files?.[0]) return;
+  gNickDraft = document.getElementById("g-nick")?.value ?? gNickDraft;
+  try {
+    gPhotoDraft = await shrinkPhoto(e.target.files[0]);
+  } catch {
+    toast("Seda pilti ei õnnestunud avada");
+  }
+  renderGames();
+});
+
+// Аватар: фото, если есть, иначе первая буква ника.
+function avatarHtml(nick, photo) {
+  return photo && /^data:image\//.test(photo)
+    ? `<span class="g-avatar photo"><img src="${esc(photo)}" alt="" /></span>`
+    : `<span class="g-avatar">${esc((nick || "?")[0].toUpperCase())}</span>`;
+}
+
 /* ---------- Экраны ---------- */
 
 function onlineText() {
@@ -486,7 +543,7 @@ function renderGames() {
   view.innerHTML = `
     <div class="g-head"><h1 class="page-title">Mängud</h1>${onlineText()}</div>
     <section class="card g-profile">
-      <span class="g-avatar">${esc(state.games.nick[0].toUpperCase())}</span>
+      ${avatarHtml(state.games.nick, state.games.avatar)}
       <span class="grow"><b>${esc(state.games.nick)}</b><small>${esc(schoolName(state.games.school))}</small></span>
       <button class="btn small" data-action="g-edit-profile">Muuda</button>
     </section>
@@ -504,14 +561,24 @@ function renderGames() {
 
 function profileFormHtml() {
   const g = state.games || {};
+  const photo = gPhotoDraft !== undefined ? gPhotoDraft : g.avatar || null;
+  const nick = gNickDraft ?? g.nick ?? "";
   return `
     <h1 class="page-title">Mängud</h1>
     <section class="card g-setup">
       <div class="g-search-icon">🎮</div>
       <h2>${g.nick ? "Muuda profiili" : "Tere tulemast mängudesse!"}</h2>
       <p class="muted">Mängi male, kabet, trips-traps-trulli ja laevade pommitamist teiste õpilastega oma koolist.</p>
+      <div class="g-photo-row">
+        ${avatarHtml(nick || "?", photo).replace("g-avatar", "g-avatar big")}
+        <span class="g-photo-actions">
+          <label class="btn small">${photo ? "Vaheta fotot" : "Lisa foto"}<input id="g-photo" type="file" accept="image/*" hidden /></label>
+          ${photo ? `<button class="btn small" data-action="g-photo-remove">Eemalda</button>` : ""}
+        </span>
+      </div>
+      <p class="muted small">Fotot näeb ainult su vastane mängu ajal. Vali pilt, mida ei häbene ka õpetajale näidata 🙂</p>
       <label><span class="field-label">Hüüdnimi</span>
-        <input class="input" id="g-nick" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="nt Kooly123" value="${esc(g.nick || "")}" /></label>
+        <input class="input" id="g-nick" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="nt Kooly123" value="${esc(nick)}" /></label>
       ${gNickError ? `<p class="g-error">${esc(gNickError)}</p>` : `<p class="muted small">3–16 märki. Teised näevad ainult hüüdnime.</p>`}
       <label><span class="field-label">Kool</span>
         <select class="input" id="g-school">${GAME_SCHOOLS.map((s) => `<option value="${s.id}" ${s.id === (g.school || GAME_SCHOOLS[0].id) ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select></label>
@@ -542,12 +609,12 @@ function matchHtml() {
       }
       <div class="g-players">
         <span class="g-player opp ${!g.over && !v.myTurn ? "turn" : ""}">
-          <span class="g-avatar">${esc(g.opp[0].toUpperCase())}</span><b>${esc(g.opp)}</b>
+          ${avatarHtml(g.opp, g.oppAvatar)}<b>${esc(g.opp)}</b>
           ${g.oppAway ? `<small class="g-away">ühenduseta…</small>` : ""}
         </span>
         <span class="g-vs">${info.icon} ${esc(info.name)}</span>
         <span class="g-player me ${!g.over && v.myTurn ? "turn" : ""}">
-          <b>${esc(state.games.nick)}</b><span class="g-avatar">${esc(state.games.nick[0].toUpperCase())}</span>
+          <b>${esc(state.games.nick)}</b>${avatarHtml(state.games.nick, state.games.avatar)}
         </span>
       </div>
       <div class="g-status ${g.over ? (g.over.win ? "win" : g.over.draw ? "draw" : "lose") : v.myTurn ? "mine" : ""}">${status}</div>
