@@ -1,0 +1,669 @@
+"use strict";
+
+/* =========================================================
+   Mängud — онлайн-игры с учениками своей школы.
+   Соединение: WebSocket к облачному посреднику (worker/games.js, лобби на школу).
+   Правила — games-rules.js; ход соперника принимается, только если он разрешён правилами.
+   state.games = { nick, school, pid } — pid: случайный id устройства (чтобы вернуться в игру после обрыва).
+   ========================================================= */
+
+const GAME_SCHOOLS = [{ id: "narvaeesti", name: "Narva Eesti Gümnaasium" }];
+
+const GAME_LIST = [
+  { id: "chess", name: "Male", icon: '<img class="gi" src="pieces/wN.svg" alt="" />', hint: "Klassikaline male" },
+  { id: "checkers", name: "Kabe", icon: '<span class="gi disc w"></span>', hint: "Vene kabe, löömine on kohustuslik" },
+  { id: "tictactoe", name: "Trips-traps-trull", icon: "✕", hint: "Kolm ühes reas" },
+  { id: "battleship", name: "Laevade pommitamine", icon: "⚓", hint: "Leia ja uputa vastase laevad" },
+];
+
+const EMOTES = ["👍", "😄", "😮", "😅", "Hea mäng!", "Edu!"];
+
+// Те же правила ника, что на сервере (worker/games.js).
+const NICK_BAD = /(хуй|хуе|хуё|пизд|бля|еба|ёба|ебл|сука|залуп|мудак|пидор|пидар|гандон|fuck|shit|bitch|cunt|nigg|fag|dick|pussy|türa|tura|munn|perse|vitt|lits|pede|hoor)/i;
+
+function cleanNick(raw) {
+  const nick = String(raw || "").replace(/\s+/g, " ").trim().slice(0, 16);
+  if (nick.length < 3) return { error: "Vähemalt 3 märki" };
+  if (!/^[\p{L}\p{N} _.-]+$/u.test(nick)) return { error: "Ainult tähed, numbrid, tühik, _ . -" };
+  if (NICK_BAD.test(nick.replace(/[\s_.-]/g, ""))) return { error: "Vali viisakam hüüdnimi" };
+  return { nick };
+}
+
+const gameInfo = (id) => GAME_LIST.find((g) => g.id === id);
+const schoolName = (id) => GAME_SCHOOLS.find((s) => s.id === id)?.name || id;
+
+let gWs = null;
+let gConnected = false;
+let gStats = null; // { online, games: { chess: { waiting, playing } } }
+let gWaiting = null; // id игры, для которой ищем соперника
+let gMatch = null; // текущая партия
+let gEditProfile = false;
+let gNickError = "";
+let gRetry = 0;
+let gRetryTimer = null;
+let gIdleTimer = null;
+let gEmoteTimer = null;
+
+/* ---------- Соединение ---------- */
+
+function gamesNeedConnection() {
+  return Boolean(state.games?.nick) && (currentTab === "games" || gWaiting || (gMatch && !gMatch.over));
+}
+
+function gamesConnect() {
+  if (!gamesNeedConnection() || (gWs && gWs.readyState <= 1)) return;
+  clearTimeout(gRetryTimer);
+  const url = `${proxyUrl().replace(/^http/, "ws")}/games/ws?school=${encodeURIComponent(state.games.school)}`;
+  let ws;
+  try {
+    ws = new WebSocket(url);
+  } catch {
+    return gamesRetry();
+  }
+  gWs = ws;
+  ws.onopen = () => gSend({ t: "hello", pid: state.games.pid, nick: state.games.nick });
+  ws.onmessage = (e) => {
+    try {
+      gamesMessage(JSON.parse(e.data));
+    } catch {
+      // битое сообщение
+    }
+  };
+  ws.onclose = () => {
+    if (gWs !== ws) return;
+    gWs = null;
+    gConnected = false;
+    gamesRerender();
+    gamesRetry();
+  };
+}
+
+function gamesRetry() {
+  if (!gamesNeedConnection() || document.hidden) return;
+  clearTimeout(gRetryTimer);
+  gRetryTimer = setTimeout(gamesConnect, Math.min(10000, 1000 * 2 ** gRetry++));
+}
+
+function gamesDisconnect() {
+  clearTimeout(gRetryTimer);
+  if (gWs) {
+    const ws = gWs;
+    gWs = null;
+    gConnected = false;
+    ws.close();
+  }
+}
+
+function gSend(msg) {
+  if (gWs?.readyState === 1) {
+    gWs.send(JSON.stringify(msg));
+    return true;
+  }
+  return false;
+}
+
+// Вызывается при каждой отрисовке: подключиться на вкладке «Mängud», отключиться через полминуты после ухода.
+function gamesOnRender() {
+  clearTimeout(gIdleTimer);
+  if (gamesNeedConnection()) gamesConnect();
+  else if (gWs) gIdleTimer = setTimeout(() => !gamesNeedConnection() && gamesDisconnect(), 30000);
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && gamesNeedConnection()) {
+    gRetry = 0;
+    gamesConnect();
+  }
+});
+
+function gamesRerender() {
+  if (currentTab === "games") renderGames();
+}
+
+/* ---------- Сообщения сервера ---------- */
+
+function gamesMessage(m) {
+  switch (m.t) {
+    case "hi":
+      gConnected = true;
+      gRetry = 0;
+      if (gWaiting) gSend({ t: "find", game: gWaiting }); // связь оборвалась во время поиска — ищем снова
+      gamesRerender();
+      break;
+    case "stats":
+      gStats = m;
+      updateGameStats();
+      break;
+    case "waiting":
+      gWaiting = m.game;
+      gamesRerender();
+      break;
+    case "matched":
+    case "resume":
+      startMatch(m);
+      break;
+    case "move":
+      if (gMatch && !gMatch.over) {
+        gMatch.moves.push({ s: m.s, m: m.m });
+        afterMove();
+      }
+      break;
+    case "opp-away":
+      if (gMatch) gMatch.oppAway = true;
+      gamesRerender();
+      break;
+    case "opp-back":
+      if (gMatch) gMatch.oppAway = false;
+      gamesRerender();
+      break;
+    case "opp-left":
+      if (gMatch && !gMatch.over) {
+        finishMatch({ win: true, text: m.reason === "resign" ? "Vastane andis alla" : "Vastane lahkus mängust" });
+      }
+      break;
+    case "emote":
+      showEmote(m.e);
+      break;
+    case "error":
+      if (m.code === "nick") {
+        gNickError = "Server ei lubanud seda hüüdnime — vali teine";
+        gEditProfile = true;
+        gamesDisconnect();
+        gamesRerender();
+      }
+      break;
+  }
+}
+
+/* ---------- Партия ---------- */
+
+function startMatch(m) {
+  const resumed = m.t === "resume";
+  gWaiting = null;
+  gMatch = { room: m.room, game: m.game, seat: m.seat, opp: m.opp, moves: m.moves || [], over: null, oppAway: false, sel: null, promo: null, sentEnd: false };
+  if (m.game === "battleship") {
+    const key = `kooly-bs-${m.room}`;
+    let fleet = null;
+    try {
+      fleet = JSON.parse(localStorage.getItem(key) || "null");
+    } catch {
+      // нет
+    }
+    gMatch.fleet = fleet || RULES.randomFleet();
+    saveFleet();
+  }
+  if (!resumed) {
+    toast(`Vastane leitud: ${m.opp}`);
+    if (navigator.vibrate) navigator.vibrate(150);
+  }
+  if (currentTab !== "games") switchTab("games");
+  afterMove();
+}
+
+function saveFleet() {
+  try {
+    localStorage.setItem(`kooly-bs-${gMatch.room}`, JSON.stringify(gMatch.fleet));
+  } catch {
+    // память недоступна — флот живёт до перезагрузки
+  }
+}
+
+function sendMove(m) {
+  if (!gMatch || gMatch.over) return;
+  if (!gSend({ t: "move", m })) return toast("Ühendus katkes — ootan…");
+  gMatch.moves.push({ s: gMatch.seat, m });
+  gMatch.sel = null;
+  gMatch.promo = null;
+  afterMove();
+}
+
+// После каждого хода: пересчитать позицию, ответить на выстрел (морской бой), проверить конец партии.
+function afterMove() {
+  const g = gMatch;
+  const pos = matchView(g);
+  g.view = pos;
+  if (g.game === "battleship" && pos.answer !== null && !g.over) {
+    const shots = new Set([...pos.oppShots.keys(), pos.answer]);
+    return sendMove({ res: RULES.answerShot(g.fleet, shots, pos.answer) });
+  }
+  if (pos.result && !g.over) {
+    finishMatch(pos.result);
+    if (!g.sentEnd) {
+      g.sentEnd = true;
+      gSend({ t: "end" });
+    }
+    return;
+  }
+  gamesRerender();
+}
+
+function finishMatch(result) {
+  gMatch.over = result;
+  gMatch.sel = null;
+  try {
+    localStorage.removeItem(`kooly-bs-${gMatch.room}`);
+  } catch {
+    // нет
+  }
+  if (navigator.vibrate) navigator.vibrate(result.win ? [80, 60, 80] : 200);
+  gamesRerender();
+}
+
+// Позиция и всё, что нужно для экрана, из списка ходов.
+function matchView(g) {
+  const mine = (s) => s === g.seat;
+  if (g.game === "chess" || g.game === "checkers") {
+    const chess = g.game === "chess";
+    let st = chess ? RULES.chessInit() : RULES.checkersInit();
+    for (const { m } of g.moves) {
+      const legal = chess ? RULES.chessLegal(st) : RULES.checkersLegal(st);
+      const mv = legal.find((x) => (chess ? RULES.chessSame(x, m) : RULES.checkersSame(x, m)));
+      if (mv) st = chess ? RULES.chessApply(st, mv) : RULES.checkersApply(st, mv);
+    }
+    const myColor = g.seat === 0 ? "w" : "b";
+    const res = chess ? RULES.chessResult(st) : RULES.checkersResult(st);
+    let result = null;
+    if (res) {
+      const reasons = { mate: "Matt", stalemate: "Patt — viik", material: "Viik — matiks pole jõudu", fifty: "Viik (50 käigu reegel)", nomoves: "Käike pole" };
+      result = res.winner === null ? { draw: true, text: reasons[res.reason] } : { win: res.winner === myColor, text: reasons[res.reason] };
+    }
+    return { st, myTurn: st.turn === myColor, legal: chess ? RULES.chessLegal(st) : RULES.checkersLegal(st), result, check: chess && RULES.chessInCheck(st) };
+  }
+  if (g.game === "tictactoe") {
+    const cells = Array(9).fill(null);
+    for (const { s, m } of g.moves) if (Number.isInteger(m.i) && !cells[m.i]) cells[m.i] = s === 0 ? "X" : "O";
+    const res = RULES.tttResult(cells);
+    const mark = g.seat === 0 ? "X" : "O";
+    const result = res ? (res.winner ? { win: res.winner === mark, text: "Kolm ühes reas" } : { draw: true, text: "Viik" }) : null;
+    return { cells, line: res?.line || null, myTurn: !res && g.moves.length % 2 === g.seat, result, mark };
+  }
+  // Морской бой
+  const ready = [false, false];
+  const myShots = new Map(), oppShots = new Map();
+  let turn = 0, pending = null, result = null;
+  const mark = (board, res) => {
+    board.set(res.i, res.hit ? "hit" : "miss");
+    if (res.sunk) {
+      for (const x of res.sunk) board.set(x, "sunk");
+      for (const x of RULES.around(res.sunk)) if (!board.has(x)) board.set(x, "near");
+    }
+  };
+  for (const { s, m } of g.moves) {
+    if (m.ready) ready[s] = true;
+    else if (Number.isInteger(m.shot)) pending = { s, i: m.shot };
+    else if (m.res && pending && pending.s !== s) {
+      const shooter = pending.s;
+      mark(mine(shooter) ? myShots : oppShots, m.res);
+      if (!m.res.hit) turn = 1 - shooter;
+      if (m.res.lose) result = { win: mine(shooter), text: mine(shooter) ? "Kõik vastase laevad on põhjas" : "Sinu laevad on põhjas" };
+      pending = null;
+    }
+  }
+  const started = ready[0] && ready[1];
+  return {
+    ready, started, myShots, oppShots, result,
+    answer: pending && !mine(pending.s) ? pending.i : null,
+    waitingAnswer: Boolean(pending && mine(pending.s)),
+    myTurn: started && !pending && !result && turn === g.seat,
+  };
+}
+
+/* ---------- Действия ---------- */
+
+function handleGamesAction(action, btn) {
+  const g = gMatch;
+  switch (action) {
+    case "g-save-profile": {
+      const input = document.getElementById("g-nick");
+      const r = cleanNick(input?.value);
+      if (r.error) {
+        gNickError = r.error;
+        return renderGames();
+      }
+      const school = document.getElementById("g-school")?.value || GAME_SCHOOLS[0].id;
+      const changed = state.games?.nick !== r.nick || state.games?.school !== school;
+      state.games = { pid: state.games?.pid || newId() + newId() + Math.random().toString(36).slice(2, 8), nick: r.nick, school };
+      gNickError = "";
+      gEditProfile = false;
+      save();
+      if (changed) gamesDisconnect(); // переподключиться с новым ником / в новую школу
+      return render();
+    }
+    case "g-edit-profile":
+      gEditProfile = true;
+      return renderGames();
+    case "g-cancel-profile":
+      gEditProfile = false;
+      gNickError = "";
+      return renderGames();
+    case "g-find":
+      gWaiting = btn.dataset.game;
+      gSend({ t: "find", game: gWaiting });
+      return renderGames();
+    case "g-cancel":
+      gSend({ t: "cancel" });
+      gWaiting = null;
+      return renderGames();
+    case "g-resign":
+      if (!g || g.over) return;
+      if (!confirm("Kas annad alla? Vastane võidab.")) return;
+      gSend({ t: "resign" });
+      return finishMatch({ win: false, text: "Andsid alla" });
+    case "g-again": {
+      const game = g?.game;
+      gMatch = null;
+      gWaiting = game;
+      gSend({ t: "find", game });
+      return renderGames();
+    }
+    case "g-lobby":
+      gMatch = null;
+      return renderGames();
+    case "g-emote":
+      if (!g || g.over) return;
+      gSend({ t: "emote", e: Number(btn.dataset.e) });
+      return showEmote(Number(btn.dataset.e), true);
+    case "g-sq":
+      return g?.game === "chess" ? chessTap(Number(btn.dataset.sq)) : checkersTap(Number(btn.dataset.sq));
+    case "g-promo":
+      if (g?.promo) sendMove({ f: g.promo.f, t: g.promo.t, p: btn.dataset.p });
+      return;
+    case "g-ttt":
+      if (g?.view.myTurn && !g.view.cells[Number(btn.dataset.i)]) sendMove({ i: Number(btn.dataset.i) });
+      return;
+    case "g-bs-shuffle":
+      if (g && !g.view.ready[g.seat]) {
+        g.fleet = RULES.randomFleet();
+        saveFleet();
+        renderGames();
+      }
+      return;
+    case "g-bs-ready":
+      if (g && !g.view.ready[g.seat]) sendMove({ ready: 1 });
+      return;
+    case "g-shot": {
+      const i = Number(btn.dataset.i);
+      if (g?.view.myTurn && !g.view.myShots.has(i)) sendMove({ shot: i });
+      return;
+    }
+  }
+}
+
+function chessTap(sq) {
+  const g = gMatch, v = g.view;
+  if (!v.myTurn || g.over) return;
+  const myColor = g.seat === 0 ? "w" : "b";
+  if (g.sel !== null) {
+    const moves = v.legal.filter((m) => m.f === g.sel && m.t === sq);
+    if (moves.length > 1) {
+      g.promo = { f: g.sel, t: sq }; // превращение пешки — выбрать фигуру
+      return renderGames();
+    }
+    if (moves.length === 1) return sendMove({ f: moves[0].f, t: moves[0].t });
+  }
+  g.sel = RULES.chessColor(v.st.b[sq]) === myColor && v.legal.some((m) => m.f === sq) ? sq : null;
+  g.promo = null;
+  renderGames();
+}
+
+// Шашки: нажимаем шашку, потом поля по очереди (при взятии нескольких — каждое поле прыжка).
+function checkersTap(sq) {
+  const g = gMatch, v = g.view;
+  if (!v.myTurn || g.over) return;
+  if (g.sel) {
+    const path = [...g.sel, sq];
+    const fits = v.legal.filter((m) => path.every((x, i) => m.path[i] === x));
+    if (fits.length) {
+      const done = fits.find((m) => m.path.length === path.length);
+      if (done && fits.length === 1) return sendMove({ path: done.path, taken: done.taken });
+      g.sel = path;
+      return renderGames();
+    }
+  }
+  g.sel = v.legal.some((m) => m.path[0] === sq) ? [sq] : null;
+  renderGames();
+}
+
+function showEmote(e, mine = false) {
+  const text = EMOTES[e];
+  if (!text || !gMatch) return;
+  gMatch.emote = { text, mine };
+  clearTimeout(gEmoteTimer);
+  gEmoteTimer = setTimeout(() => {
+    if (gMatch) gMatch.emote = null;
+    gamesRerender();
+  }, 3000);
+  gamesRerender();
+}
+
+/* ---------- Экраны ---------- */
+
+function onlineText() {
+  if (!gConnected) return `<span class="g-online off">Ühendan…</span>`;
+  return `<span class="g-online" data-gstat="online">${gStats ? gStats.online : "…"} võrgus</span>`;
+}
+
+function gameCountsText(id) {
+  const s = gStats?.games?.[id];
+  if (!s) return "";
+  const parts = [];
+  if (s.waiting) parts.push(`${s.waiting} ootab`);
+  if (s.playing) parts.push(`${s.playing} mängib`);
+  return parts.length ? parts.join(" · ") : "vaba";
+}
+
+// Обновить счётчики на месте — без перерисовки (чтобы не сбивать ввод и анимации).
+function updateGameStats() {
+  if (currentTab !== "games") return;
+  const online = document.querySelector('[data-gstat="online"]');
+  if (online && gStats) online.textContent = `${gStats.online} võrgus`;
+  for (const el of document.querySelectorAll("[data-gstat-game]")) {
+    const text = gameCountsText(el.dataset.gstatGame);
+    el.textContent = text;
+    el.classList.toggle("busy", text !== "vaba" && text !== "");
+  }
+}
+
+function renderGames() {
+  gamesOnRender();
+  if (!state.games?.nick || gEditProfile) return (view.innerHTML = profileFormHtml());
+  if (gMatch) return (view.innerHTML = matchHtml());
+  if (gWaiting) {
+    const info = gameInfo(gWaiting);
+    view.innerHTML = `
+      <div class="g-head"><h1 class="page-title">Mängud</h1>${onlineText()}</div>
+      <section class="card g-search">
+        <div class="g-search-icon">${info.icon}</div>
+        <h2>Otsin vastast…</h2>
+        <p class="muted">${esc(info.name)} · ${esc(schoolName(state.games.school))}</p>
+        <div class="g-spinner" aria-hidden="true"></div>
+        <p class="muted small" data-gstat-game="${info.id}">${gameCountsText(info.id)}</p>
+        <button class="btn" data-action="g-cancel">Tühista</button>
+      </section>
+      <p class="page-lead">Kui keegi teine sinu koolist valib sama mängu, algab mäng kohe. Võid vahepeal teisi vahekaarte vaadata.</p>`;
+    return;
+  }
+  view.innerHTML = `
+    <div class="g-head"><h1 class="page-title">Mängud</h1>${onlineText()}</div>
+    <section class="card g-profile">
+      <span class="g-avatar">${esc(state.games.nick[0].toUpperCase())}</span>
+      <span class="grow"><b>${esc(state.games.nick)}</b><small>${esc(schoolName(state.games.school))}</small></span>
+      <button class="btn small" data-action="g-edit-profile">Muuda</button>
+    </section>
+    <div class="g-grid">${GAME_LIST.map(
+      (g) => `<button class="g-card" data-action="g-find" data-game="${g.id}" ${gConnected ? "" : "disabled"}>
+        <span class="g-count" data-gstat-game="${g.id}">${gameCountsText(g.id)}</span>
+        <span class="g-icon">${g.icon}</span>
+        <b>${esc(g.name)}</b>
+        <small>${esc(g.hint)}</small>
+      </button>`
+    ).join("")}</div>
+    <p class="page-lead">Vajuta mängule — Kooly leiab vastase sinu koolist. Vestlust pole, ainult kiired emotikonid.</p>`;
+  updateGameStats();
+}
+
+function profileFormHtml() {
+  const g = state.games || {};
+  return `
+    <h1 class="page-title">Mängud</h1>
+    <section class="card g-setup">
+      <div class="g-search-icon">🎮</div>
+      <h2>${g.nick ? "Muuda profiili" : "Tere tulemast mängudesse!"}</h2>
+      <p class="muted">Mängi male, kabet, trips-traps-trulli ja laevade pommitamist teiste õpilastega oma koolist.</p>
+      <label><span class="field-label">Hüüdnimi</span>
+        <input class="input" id="g-nick" maxlength="16" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="nt Kooly123" value="${esc(g.nick || "")}" /></label>
+      ${gNickError ? `<p class="g-error">${esc(gNickError)}</p>` : `<p class="muted small">3–16 märki. Teised näevad ainult hüüdnime.</p>`}
+      <label><span class="field-label">Kool</span>
+        <select class="input" id="g-school">${GAME_SCHOOLS.map((s) => `<option value="${s.id}" ${s.id === (g.school || GAME_SCHOOLS[0].id) ? "selected" : ""}>${esc(s.name)}</option>`).join("")}</select></label>
+      <div class="actions">
+        <button class="btn primary" data-action="g-save-profile">${g.nick ? "Salvesta" : "Alusta"}</button>
+        ${g.nick ? `<button class="btn" data-action="g-cancel-profile">Loobu</button>` : ""}
+      </div>
+    </section>`;
+}
+
+function matchHtml() {
+  const g = gMatch, v = g.view, info = gameInfo(g.game);
+  let status;
+  if (g.over) status = g.over.draw ? `🤝 Viik · ${esc(g.over.text)}` : g.over.win ? `🏆 Võitsid! · ${esc(g.over.text)}` : `Kaotasid · ${esc(g.over.text)}`;
+  else if (g.game === "battleship" && !v.started) status = v.ready[g.seat] ? "Ootan, kuni vastane paigutab laevad…" : "Paiguta laevad ja vajuta „Valmis“";
+  else if (g.game === "battleship" && v.waitingAnswer) status = "Lask…";
+  else status = v.myTurn ? (v.check ? "Šahh! Sinu käik" : "Sinu käik") : v.check ? "Vastane on šahis — vastase käik" : "Vastase käik";
+
+  const board =
+    g.game === "chess" ? chessBoardHtml(g) : g.game === "checkers" ? checkersBoardHtml(g) : g.game === "tictactoe" ? tttHtml(g) : battleshipHtml(g);
+
+  return `
+    <div class="g-match ${g.over ? "over" : ""}">
+      <div class="g-players">
+        <span class="g-player opp ${!g.over && !v.myTurn ? "turn" : ""}">
+          <span class="g-avatar">${esc(g.opp[0].toUpperCase())}</span><b>${esc(g.opp)}</b>
+          ${g.oppAway ? `<small class="g-away">ühenduseta…</small>` : ""}
+          ${g.emote && !g.emote.mine ? `<span class="g-bubble">${esc(g.emote.text)}</span>` : ""}
+        </span>
+        <span class="g-vs">${info.icon} ${esc(info.name)}</span>
+        <span class="g-player me ${!g.over && v.myTurn ? "turn" : ""}">
+          ${g.emote?.mine ? `<span class="g-bubble">${esc(g.emote.text)}</span>` : ""}
+          <b>${esc(state.games.nick)}</b><span class="g-avatar">${esc(state.games.nick[0].toUpperCase())}</span>
+        </span>
+      </div>
+      <div class="g-status ${g.over ? (g.over.win ? "win" : g.over.draw ? "draw" : "lose") : v.myTurn ? "mine" : ""}">${status}</div>
+      ${!gConnected && !g.over ? `<p class="g-error">Ühendus katkes — ühendan uuesti…</p>` : ""}
+      ${g.oppAway && !g.over ? `<p class="muted small center">Vastane on ühenduseta. Kui ta 90 sekundi jooksul tagasi ei tule, võidad sina.</p>` : ""}
+      ${board}
+      ${
+        g.over
+          ? `<div class="actions center"><button class="btn primary" data-action="g-again">Uus vastane</button><button class="btn" data-action="g-lobby">Mängud</button></div>`
+          : `<div class="g-emotes">${EMOTES.map((e, i) => `<button data-action="g-emote" data-e="${i}">${esc(e)}</button>`).join("")}</div>
+             <div class="actions center"><button class="btn small danger" data-action="g-resign">Anna alla</button></div>`
+      }
+    </div>`;
+}
+
+/* --- Доски --- */
+
+// Фигуры — рисунки lichess (pieces/, набор cburnett): одинаково выглядят на iPhone, Android и в браузере.
+const pieceImg = (p, cls = "pc") => `<img class="${cls}" src="pieces/${RULES.chessColor(p)}${p.toUpperCase()}.svg" alt="" draggable="false" />`;
+
+function boardOrder(seat) {
+  const order = [...Array(64).keys()];
+  return seat === 1 ? order.reverse() : order; // чёрные смотрят со своей стороны
+}
+
+function coordLabels(i, seat) {
+  const r = i >> 3, c = i & 7;
+  const edgeCol = seat === 1 ? 7 : 0, edgeRow = seat === 1 ? 0 : 7;
+  return `${c === edgeCol ? `<i class="rank">${8 - r}</i>` : ""}${r === edgeRow ? `<i class="file">${"abcdefgh"[c]}</i>` : ""}`;
+}
+
+function chessBoardHtml(g) {
+  const v = g.view, st = v.st;
+  const targets = g.sel !== null ? new Set(v.legal.filter((m) => m.f === g.sel).map((m) => m.t)) : new Set();
+  const kingSq = v.check ? st.b.indexOf(st.turn === "w" ? "K" : "k") : -1;
+  // Взятые фигуры: чего не хватает по сравнению с началом.
+  const start = { P: 8, N: 2, B: 2, R: 2, Q: 1 };
+  const lost = (color) => {
+    const out = [];
+    for (const k of "QRBNP") {
+      const have = st.b.filter((p) => p && p === (color === "w" ? k : k.toLowerCase())).length;
+      for (let i = have; i < start[k]; i++) out.push(k);
+    }
+    return out;
+  };
+  const myColor = g.seat === 0 ? "w" : "b", oppColor = myColor === "w" ? "b" : "w";
+  const capturedRow = (color) => `<div class="g-captured">${lost(color).map((k) => pieceImg(color === "w" ? k : k.toLowerCase(), "cp")).join("")}</div>`;
+  return `
+    ${capturedRow(myColor)}
+    <div class="g-board chess">${boardOrder(g.seat)
+      .map((i) => {
+        const p = st.b[i];
+        const dark = ((i >> 3) + (i & 7)) % 2 === 1;
+        const cls = [dark ? "dk" : "lt", g.sel === i ? "g-sel" : "", st.last && (st.last.f === i || st.last.t === i) ? "g-last" : "", i === kingSq ? "g-check" : "", targets.has(i) ? (p ? "g-cap" : "g-dot") : ""].join(" ");
+        return `<button class="sq ${cls}" data-action="g-sq" data-sq="${i}">${coordLabels(i, g.seat)}${p ? pieceImg(p) : ""}</button>`;
+      })
+      .join("")}
+      ${
+        g.promo
+          ? `<div class="g-promo">${"QRBN".split("").map((k) => `<button data-action="g-promo" data-p="${k}">${pieceImg(myColor === "w" ? k : k.toLowerCase())}</button>`).join("")}</div>`
+          : ""
+      }
+    </div>
+    ${capturedRow(oppColor)}`;
+}
+
+function checkersBoardHtml(g) {
+  const v = g.view, st = v.st;
+  const sel = g.sel || [];
+  const next = new Set(sel.length ? v.legal.filter((m) => sel.every((x, i) => m.path[i] === x)).map((m) => m.path[sel.length]).filter((x) => x !== undefined) : []);
+  const movable = new Set(v.myTurn ? v.legal.map((m) => m.path[0]) : []);
+  const mustCapture = v.myTurn && v.legal.some((m) => m.taken.length);
+  const lastPath = new Set(st.last?.path || []);
+  return `
+    ${mustCapture ? `<p class="muted small center">Löömine on kohustuslik</p>` : ""}
+    <div class="g-board checkers">${boardOrder(g.seat)
+      .map((i) => {
+        const p = st.b[i];
+        const dark = ((i >> 3) + (i & 7)) % 2 === 1;
+        const cls = [dark ? "dk" : "lt", sel.includes(i) ? "g-sel" : "", lastPath.has(i) ? "g-last" : "", next.has(i) ? "g-dot" : "", !sel.length && movable.has(i) && mustCapture ? "g-must" : ""].join(" ");
+        return `<button class="sq ${cls}" data-action="g-sq" data-sq="${i}" ${dark ? "" : "disabled"}>${
+          p ? `<span class="disc ${RULES.ckColor(p)} ${RULES.ckKing(p) ? "king" : ""}"></span>` : ""
+        }</button>`;
+      })
+      .join("")}</div>`;
+}
+
+function tttHtml(g) {
+  const v = g.view;
+  const line = new Set(v.line || []);
+  return `
+    <p class="muted small center">Sina oled <b>${v.mark}</b></p>
+    <div class="g-ttt">${v.cells
+      .map((c, i) => `<button class="${c ? c.toLowerCase() : ""} ${line.has(i) ? "win" : ""}" data-action="g-ttt" data-i="${i}" ${c || !v.myTurn ? "disabled" : ""}>${c || ""}</button>`)
+      .join("")}</div>`;
+}
+
+function battleshipHtml(g) {
+  const v = g.view;
+  const myCells = new Set(g.fleet.flat());
+  const grid = (cls, cell) => `<div class="g-sea ${cls}">${Array.from({ length: 100 }, (_, i) => cell(i)).join("")}</div>`;
+  const mine = grid("mine", (i) => {
+    const shot = v.oppShots.get(i);
+    return `<span class="${myCells.has(i) ? "ship" : ""} ${shot || ""}"></span>`;
+  });
+  if (!v.started) {
+    return `
+      <div class="g-sea-wrap"><h3>Sinu laevad</h3>${mine}</div>
+      ${
+        v.ready[g.seat]
+          ? `<p class="muted center">Valmis! Ootan vastast…</p>`
+          : `<div class="actions center"><button class="btn" data-action="g-bs-shuffle">Juhuslik paigutus</button><button class="btn primary" data-action="g-bs-ready">Valmis</button></div>`
+      }`;
+  }
+  const target = grid(`target ${v.myTurn ? "active" : ""}`, (i) => {
+    const shot = v.myShots.get(i);
+    return shot ? `<span class="${shot}"></span>` : `<button data-action="g-shot" data-i="${i}" ${v.myTurn ? "" : "disabled"} aria-label="Lask"></button>`;
+  });
+  return `
+    <div class="g-sea-wrap"><h3>Vastase meri</h3>${target}</div>
+    <div class="g-sea-wrap small"><h3>Sinu laevad</h3>${mine}</div>`;
+}

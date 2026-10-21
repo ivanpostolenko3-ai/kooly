@@ -4,7 +4,15 @@
 //   GET  /page?url=<адрес>                                → HTML страницы с сайта из ALLOWED_SITES (меню столовой)
 //   GET  /ping                                            → проверка из настроек Kooly
 //   POST /voice                                           → ИИ-диктовка: аудио → текст (Whisper) → задание (Llama), как Typeless
+//   GET  /games/ws?school=<школа>  (WebSocket)            → «Mängud»: онлайн-игры с учениками своей школы (games.js)
 // Личных данных здесь нет: Stuudium сюда не ходит.
+
+import { GameLobby } from "./games.js";
+
+export { GameLobby };
+
+// Школы, для которых открыты онлайн-игры (id = поддомен Stuudium/EduPage).
+const GAME_SCHOOLS = ["narvaeesti"];
 
 const EDUPAGE_PATH = /^\/edupage\/([a-z0-9-]{2,63})\/(regulartt|ttviewer)\/(regularttGetData|getTTViewerData)$/;
 const MAX_PAGE_BYTES = 3_000_000;
@@ -176,6 +184,15 @@ export default {
         body,
       });
       return new Response(res.body, { status: res.status, headers: cors({ "Content-Type": "application/json; charset=utf-8" }) });
+    }
+
+    if (url.pathname === "/games/ws") {
+      // Только из Kooly (сайт и приложения открывают тот же адрес github.io).
+      if (!VOICE_ORIGINS.includes(request.headers.get("Origin") || "")) return new Response("origin not allowed", { status: 403 });
+      if (request.headers.get("Upgrade") !== "websocket") return new Response("websocket expected", { status: 426 });
+      const school = url.searchParams.get("school") || "";
+      if (!GAME_SCHOOLS.includes(school)) return new Response("school", { status: 404 });
+      return env.LOBBY.get(env.LOBBY.idFromName(school)).fetch(request);
     }
 
     if (url.pathname === "/voice" && request.method === "POST") {

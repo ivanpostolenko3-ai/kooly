@@ -11,7 +11,7 @@ const DAYS = ["pühapäev", "esmaspäev", "teisipäev", "kolmapäev", "neljapäe
 const DAYS_SHORT = ["P", "E", "T", "K", "N", "R", "L"];
 const MONTHS = ["jaanuar", "veebruar", "märts", "aprill", "mai", "juuni", "juuli", "august", "september", "oktoober", "november", "detsember"];
 const MONTHS_SHORT = ["jaan", "veebr", "märts", "apr", "mai", "juuni", "juuli", "aug", "sept", "okt", "nov", "dets"];
-const TABS = ["now", "tomorrow", "tasks", "calendar", "progress"];
+const TABS = ["now", "tomorrow", "tasks", "calendar", "progress", "games"];
 
 const ICONS = {
   check: '<svg class="i" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
@@ -554,7 +554,9 @@ function render() {
   else if (currentTab === "tasks") renderTasks();
   else if (currentTab === "progress") renderProgress();
   else if (currentTab === "calendar") renderCalendar();
+  else if (currentTab === "games") renderGames();
   else renderSettings();
+  if (currentTab !== "games") gamesOnRender(); // онлайн «Mängud»: отключиться, если ушли с вкладки и не играем
 }
 
 function roomText(room) {
@@ -1429,6 +1431,7 @@ document.addEventListener("click", (e) => {
     save();
     return render();
   }
+  if (action.startsWith("g-")) return handleGamesAction(action, btn);
   if (action.startsWith("cal-") || action.startsWith("gcal-") || action === "ics-export" || action === "stucal-paste") return handleCalendarAction(action, btn);
   if (action.startsWith("edupage-")) return handleEdupageAction(action);
   if (action.startsWith("stuudium-")) return handleStuudiumAction(action);

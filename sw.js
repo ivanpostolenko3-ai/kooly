@@ -1,5 +1,5 @@
 // Офлайн-кэш: приложение открывается без интернета.
-const CACHE = "kooly-v24";
+const CACHE = "kooly-v25";
 const ASSETS = [
   "./",
   "index.html",
@@ -10,6 +10,10 @@ const ASSETS = [
   "progress.js",
   "menu.js",
   "calendar.js",
+  "games-rules.js",
+  "games.js",
+  "pieces/wK.svg", "pieces/wQ.svg", "pieces/wR.svg", "pieces/wB.svg", "pieces/wN.svg", "pieces/wP.svg",
+  "pieces/bK.svg", "pieces/bQ.svg", "pieces/bR.svg", "pieces/bB.svg", "pieces/bN.svg", "pieces/bP.svg",
   "app.js",
   "fonts/mulish-cyrillic.woff2",
   "fonts/mulish-latin.woff2",

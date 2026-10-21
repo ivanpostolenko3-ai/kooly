@@ -8,3 +8,12 @@ ALLOWED_SITES = "nerg.ee,ope.ee,stuudium.com"
 
 [ai]
 binding = "AI"
+
+# «Mängud»: комната-лобби на каждую школу (Durable Object на SQLite — есть в бесплатном плане)
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "GameLobby"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameLobby"]
