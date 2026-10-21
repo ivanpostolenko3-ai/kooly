@@ -201,25 +201,66 @@ function parseStuudiumGrades(html, period) {
   return { period: period || "", subjects, courses };
 }
 
-// Код для ярлыка iOS «Выполнить JavaScript на веб-странице»: собирает домашку и оценки со страницы Stuudium.
-const STUUDIUM_SHORTCUT_JS = `(async () => {
-  try {
-    if (!/\\.ope\\.ee$/.test(location.hostname)) return completion("KOOLY-ERR:not-stuudium");
+// Все части таблицы оценок (текущая + более ранние): для «Periood» — части текущего периода,
+// для архива статистики (месяц, полгода, год) — все. Одна и та же оценка не повторяется.
+function parseStuudiumGradePages(data) {
+  if (!data) return null;
+  const pages = [data, ...(data.older || [])].map((p) => parseStuudiumGrades(p.html || "", p.period));
+  const current = pages[0];
+  const merged = (sets) => {
+    const bySubject = new Map();
+    for (const set of sets) {
+      for (const s of set.subjects) {
+        let m = bySubject.get(s.name);
+        if (!m) bySubject.set(s.name, (m = { name: s.name, final: "", grades: [], keys: new Set() }));
+        if (!m.final && s.final) m.final = s.final; // текущая часть идёт первой — её итог главнее
+        for (const g of s.grades) {
+          const key = [g.date, g.value, g.note, g.comment].join("|");
+          if (!m.keys.has(key)) m.keys.add(key), m.grades.push(g);
+        }
+      }
+    }
+    return [...bySubject.values()].map(({ keys, ...s }) => ({ ...s, grades: s.grades.sort((a, b) => a.date.localeCompare(b.date)) }));
+  };
+  return {
+    period: current.period,
+    subjects: merged(pages.filter((p) => p.period === current.period)),
+    courses: current.courses,
+    history: merged(pages),
+  };
+}
+
+// Тело async-функции, которая на странице Stuudium собирает домашку и оценки: возвращает JSON или KOOLY-ERR:код.
+// Один код для всех: ярлык iOS (ниже) и приложения для iPhone и Android — они получают его из сообщений
+// stuudium-sync / stuudium-script, так что исправления здесь не требуют переустановки приложений.
+// Таблицу оценок Stuudium делит на части («eelmine» / «järgmine»): по умолчанию видна только текущая,
+// поэтому идём по «eelmine» назад до начала учебного года (на прошлый год — «eelmine aasta» — не переходим).
+const STUUDIUM_FETCH_JS = `
+    if (!/\\.ope\\.ee$/.test(location.hostname)) return "KOOLY-ERR:not-stuudium";
     const base = location.origin;
     const get = async (u) => new DOMParser().parseFromString(await (await fetch(u, { credentials: "include" })).text(), "text/html");
     const home = await get(base + "/");
-    if (home.querySelector("#main_login_form")) return completion("KOOLY-ERR:login");
+    if (home.querySelector("#main_login_form")) return "KOOLY-ERR:login";
     const todos = [...home.querySelectorAll(".todo_container")].map((e) => ({ html: e.outerHTML, marked: !!e.closest(".is_marked") }));
     const a = [...home.querySelectorAll("a[href]")].find((x) => /^hinded$/i.test(x.textContent.trim()) || /\\/grades\\/student\\//.test(x.getAttribute("href")));
     let grades = null;
     if (a) {
-      const g = await get(new URL(a.getAttribute("href"), base));
-      const t = g.querySelector("table.student_lessons_grades");
-      const p = [...g.querySelectorAll("h3")].map((x) => x.textContent.trim()).find((x) => /\\d+\\.\\d+\\s*[—–-]/.test(x));
-      grades = { html: t ? t.innerHTML : "", period: p || "" };
+      const pages = [];
+      const seen = new Set();
+      let url = new URL(a.getAttribute("href"), base).href;
+      while (url && pages.length < 8 && !seen.has(url)) {
+        seen.add(url);
+        const g = await get(url);
+        const t = g.querySelector("table.student_lessons_grades");
+        const p = [...g.querySelectorAll("h3")].map((x) => x.textContent.trim()).find((x) => /\\d+\\.\\d+\\s*[—–-]/.test(x));
+        pages.push({ html: t ? t.innerHTML : "", period: p || "" });
+        const prev = g.querySelector("a.period_prev")?.getAttribute("href");
+        url = prev && !/year_move/.test(prev) ? new URL(prev, base).href : null;
+      }
+      grades = { ...pages[0], older: pages.slice(1) };
     }
-    completion(JSON.stringify({ kooly: "stuudium/1", school: location.hostname.split(".")[0], at: Date.now(), todos, grades }));
-  } catch (e) {
-    completion("KOOLY-ERR:" + e.message);
-  }
-})();`;
+    return JSON.stringify({ kooly: "stuudium/1", school: location.hostname.split(".")[0], at: Date.now(), todos, grades });
+`;
+
+// Код для ярлыка iOS «Выполнить JavaScript на веб-странице».
+const STUUDIUM_SHORTCUT_JS = `(async () => {${STUUDIUM_FETCH_JS}})().then(completion, (e) => completion("KOOLY-ERR:" + e.message));`;

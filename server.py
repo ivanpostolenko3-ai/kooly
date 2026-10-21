@@ -506,6 +506,50 @@ def find_grades_url(page, base):
     return None
 
 
+def find_prev_grades_url(page, base):
+    """«eelmine» — предыдущая часть таблицы оценок. Stuudium показывает по умолчанию только текущую часть,
+    поэтому идём назад до начала учебного года («eelmine aasta» — прошлый год — пропускаем)."""
+    builder = TreeBuilder()
+    builder.feed(page)
+    for a in builder.root.find_all(lambda n: n.tag == "a" and "period_prev" in n.classes and n.attrs.get("href")):
+        href = a.attrs["href"]
+        if "year_move" in href:
+            return None
+        return href if href.startswith("http") else base.rstrip("/") + "/" + href.lstrip("/")
+    return None
+
+
+def merge_grade_pages(pages):
+    """Части таблицы оценок → как у веб-части (parseStuudiumGradePages): текущий период + вся история."""
+    current = pages[0]
+
+    def merged(sets):
+        by_subject = {}
+        for st in sets:
+            for s in st["subjects"]:
+                m = by_subject.setdefault(s["name"], {"name": s["name"], "final": "", "grades": [], "keys": set()})
+                if not m["final"] and s["final"]:
+                    m["final"] = s["final"]
+                for g in s["grades"]:
+                    key = (g["date"], g["value"], g["note"], g["comment"])
+                    if key not in m["keys"]:
+                        m["keys"].add(key)
+                        m["grades"].append(g)
+        out = []
+        for m in by_subject.values():
+            m.pop("keys")
+            m["grades"].sort(key=lambda g: g["date"])
+            out.append(m)
+        return out
+
+    return {
+        "period": current["period"],
+        "subjects": merged([p for p in pages if p["period"] == current["period"]]),
+        "courses": current["courses"],
+        "history": merged(pages),
+    }
+
+
 # ---------- Страницы сайта школы (меню столовой) ----------
 
 def fetch_text(url, timeout=20):
@@ -702,15 +746,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             session = StuudiumSession(chrome)
             page = session.read(base)
             logged_in = bool(page.strip()) and 'id="main_login_form"' not in page and 'data-role="login-form"' not in page
-            grades_page = ""
+            grades_pages = []
             if logged_in:
                 with open(STUUDIUM_SAMPLE, "w", encoding="utf-8") as f:
                     f.write(page)
                 grades_url = find_grades_url(page, base)
-                if grades_url:
+                seen = set()
+                while grades_url and len(grades_pages) < 8 and grades_url not in seen:
+                    seen.add(grades_url)
                     grades_page = session.read(grades_url)
-                    with open(STUUDIUM_GRADES_SAMPLE, "w", encoding="utf-8") as f:
-                        f.write(grades_page)
+                    if not grades_pages:
+                        with open(STUUDIUM_GRADES_SAMPLE, "w", encoding="utf-8") as f:
+                            f.write(grades_page)
+                    grades_pages.append(grades_page)
+                    grades_url = find_prev_grades_url(grades_page, base)
         except Exception as e:
             sys.stderr.write(f"stuudium: {e!r}\n")
             return self.json(502, {"error": "chrome"})
@@ -722,7 +771,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not logged_in:
             return self.json(401, {"error": "login"})
         tasks = parse_stuudium_todos(page)
-        grades = parse_stuudium_grades(grades_page) if grades_page else None
+        grades = merge_grade_pages([parse_stuudium_grades(p) for p in grades_pages]) if grades_pages else None
         result = {"tasks": tasks, "grades": grades}
         if not tasks:
             result["warning"] = "no-todos"

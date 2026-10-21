@@ -54,7 +54,10 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
                 let granted = (try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])) ?? false
                 if granted, let s = KoolyShared.loadSnapshot() { NotificationScheduler.schedule(s) }
             }
+        case "stuudium-script":
+            saveScript(body)
         case "stuudium-login":
+            saveScript(body)
             if let s = body["school"] as? String, !s.isEmpty { setSchool(s) }
             showStuudiumLogin = true
         case "gcal-token":
@@ -85,11 +88,17 @@ final class NativeBridge: NSObject, ObservableObject, WKScriptMessageHandler {
         case "log":
             NSLog("KoolyWeb: %@", body["msg"] as? String ?? "")
         case "stuudium-sync":
+            saveScript(body)
             if let s = body["school"] as? String, !s.isEmpty { setSchool(s) }
             syncStuudium(quiet: false)
         default:
             break
         }
+    }
+
+    /// Код сбора домашки и оценок приходит с сайта (STUUDIUM_FETCH_JS в connect.js) — исправления без переустановки.
+    private func saveScript(_ body: [String: Any]) {
+        if let script = body["script"] as? String, !script.isEmpty { UserDefaults.standard.set(script, forKey: "stuudiumScript") }
     }
 
     private func setSchool(_ s: String) {

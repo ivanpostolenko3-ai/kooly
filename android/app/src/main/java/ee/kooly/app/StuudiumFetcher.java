@@ -19,7 +19,7 @@ final class StuudiumFetcher {
         void done(String raw);
     }
 
-    // Тот же скрипт, что StuudiumFetcher.script в iOS: тело async-функции с return.
+    // Запасной код, пока сайт не прислал свежий STUUDIUM_FETCH_JS (connect.js): тело async-функции с return.
     private static final String SCRIPT =
             "if (!/\\.ope\\.ee$/.test(location.hostname)) return \"KOOLY-ERR:not-stuudium\";\n"
             + "const base = location.origin;\n"
@@ -40,6 +40,7 @@ final class StuudiumFetcher {
     final WebView webView;
     private final Handler main = new Handler(Looper.getMainLooper());
     private Callback pending;
+    String script; // свежий код с сайта (MainActivity сохраняет его в настройках)
     private boolean injected;
     private int run; // номер загрузки: таймаут старой не должен оборвать новую
 
@@ -61,7 +62,7 @@ final class StuudiumFetcher {
             public void onPageFinished(WebView view, String url) {
                 if (pending == null || injected || url == null || !url.contains(".ope.ee/")) return;
                 injected = true;
-                view.evaluateJavascript("(async () => {\n" + SCRIPT + "})()"
+                view.evaluateJavascript("(async () => {\n" + (script != null ? script : SCRIPT) + "\n})()"
                         + ".catch((e) => \"KOOLY-ERR:\" + (e && e.message || e))"
                         + ".then((r) => KoolyFetch.result(String(r)));", null);
             }

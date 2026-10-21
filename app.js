@@ -1700,6 +1700,7 @@ if ("serviceWorker" in navigator && location.protocol !== "file:") {
 save();
 applyTheme();
 render();
+if (hasNative) nativePost({ type: "stuudium-script", script: STUUDIUM_FETCH_JS }); // приложение запомнит свежий код для фоновых обновлений
 if (hasNative) nativePost({ type: "ready" }); // приложение для iPhone убирает заставку
 setInterval(() => {
   tick();

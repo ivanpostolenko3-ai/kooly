@@ -83,6 +83,7 @@ public class MainActivity extends Activity {
         applyInsets();
 
         fetcher = new StuudiumFetcher(this);
+        fetcher.script = prefs().getString("stuudiumScript", null);
         root.addView(fetcher.webView, new FrameLayout.LayoutParams(1, 1)); // невидимая страница Stuudium
         fetcher.webView.setAlpha(0.01f);
 
@@ -331,11 +332,16 @@ public class MainActivity extends Activity {
                 askNotifications();
                 Notifier.testTimer(this, m.optDouble("minutes", 2));
                 break;
+            case "stuudium-script":
+                saveScript(m);
+                break;
             case "stuudium-login":
+                saveScript(m);
                 setSchool(m.optString("school"));
                 startActivityForResult(new Intent(this, StuudiumLoginActivity.class).putExtra("school", school), REQ_STUUDIUM);
                 break;
             case "stuudium-sync":
+                saveScript(m);
                 setSchool(m.optString("school"));
                 syncStuudium(false);
                 break;
@@ -365,6 +371,14 @@ public class MainActivity extends Activity {
             default:
                 break;
         }
+    }
+
+    /** Код сбора домашки и оценок приходит с сайта (STUUDIUM_FETCH_JS в connect.js) — исправления без переустановки. */
+    private void saveScript(JSONObject m) {
+        String script = m.optString("script", "");
+        if (script.isEmpty()) return;
+        fetcher.script = script;
+        prefs().edit().putString("stuudiumScript", script).apply();
     }
 
     private void setSchool(String s) {

@@ -33,7 +33,8 @@ final class StuudiumFetcher: NSObject, WKNavigationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 25) { [weak self] in self?.finishLoading() }
         }
         do {
-            let result = try await webView.callAsyncJavaScript(Self.script, arguments: [:], in: nil, contentWorld: .defaultClient)
+            let script = UserDefaults.standard.string(forKey: "stuudiumScript") ?? Self.script // свежий код с сайта, если уже пришёл
+            let result = try await webView.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: .defaultClient)
             return result as? String ?? "KOOLY-ERR:empty"
         } catch {
             return "KOOLY-ERR:\(error.localizedDescription)"
@@ -49,7 +50,7 @@ final class StuudiumFetcher: NSObject, WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { finishLoading() }
     func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) { finishLoading() }
 
-    /// То же, что STUUDIUM_SHORTCUT_JS в connect.js, но с return вместо completion().
+    /// Запасной вариант, пока сайт не прислал свежий STUUDIUM_FETCH_JS (connect.js).
     static let script = """
     if (!/\\.ope\\.ee$/.test(location.hostname)) return "KOOLY-ERR:not-stuudium";
     const base = location.origin;

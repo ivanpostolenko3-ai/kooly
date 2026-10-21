@@ -94,8 +94,12 @@ function applyStuudium(list) {
 function applyStuudiumResult(data, at) {
   const st = state.stuudium || (state.stuudium = { school: data.school || STUUDIUM_DEFAULT_SCHOOL });
   const added = applyStuudium(data.tasks || []);
-  if (data.grades?.subjects?.length) state.grades = { ...data.grades, updatedAt: at };
-  archiveGrades(data.grades); // история для статистики за месяц, полгода, год
+  if (data.grades?.subjects?.length) {
+    const { history, ...grades } = data.grades;
+    state.grades = { ...grades, updatedAt: at };
+  }
+  // История для статистики за месяц, полгода, год — из всех частей таблицы Stuudium.
+  archiveGrades(data.grades?.history ? { subjects: data.grades.history } : data.grades);
   st.status = "connected";
   st.lastSync = at;
   st.count = (data.tasks || []).length;
@@ -141,7 +145,7 @@ function importStuudiumPayload(raw, { mode, quiet = false }) {
     return toast("Lõikelaual pole Stuudiumi andmeid. Käivita Safari's otsetee „Kooly“.");
   }
   const tasks = parseStuudiumTodos(data.todos || []);
-  const grades = data.grades?.html ? parseStuudiumGrades(data.grades.html, data.grades.period) : null;
+  const grades = data.grades ? parseStuudiumGradePages(data.grades) : null;
   state.stuudium = { ...(state.stuudium || {}), school: data.school, mode };
   const added = applyStuudiumResult({ tasks, grades, school: data.school, warning: tasks.length ? null : "no-todos" }, data.at || Date.now());
   save();
@@ -270,11 +274,11 @@ async function handleStuudiumAction(action) {
   } else if (action === "stuudium-sync") {
     stuudiumSync();
   } else if (action === "stuudium-native-login") {
-    nativePost({ type: "stuudium-login", school: state.stuudium?.school || STUUDIUM_DEFAULT_SCHOOL });
+    nativePost({ type: "stuudium-login", school: state.stuudium?.school || STUUDIUM_DEFAULT_SCHOOL, script: STUUDIUM_FETCH_JS });
   } else if (action === "stuudium-native-sync") {
     stuudiumBusy = true;
     render();
-    nativePost({ type: "stuudium-sync", school: state.stuudium?.school || STUUDIUM_DEFAULT_SCHOOL });
+    nativePost({ type: "stuudium-sync", school: state.stuudium?.school || STUUDIUM_DEFAULT_SCHOOL, script: STUUDIUM_FETCH_JS });
   } else if (action === "stuudium-paste") {
     stuudiumPaste();
   } else if (action === "stuudium-copy-code") {
