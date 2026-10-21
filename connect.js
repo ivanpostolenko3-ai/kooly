@@ -159,6 +159,10 @@ function parseStuudiumTodos(items) {
   return tasks;
 }
 
+// Оценка в процентах: Stuudium пишет то «95», то «95%» (с октября 2026) — храним без знака процента.
+const gradeValue = (raw) => String(raw || "").replace(/^(\d+)\s*%$/, "$1");
+const gradeNumeric = (value) => (/^\d+$/.test(value) ? Number(value) : null);
+
 // Таблица «Minu hinded»: строка на предмет, ячейка td.lesson_ГГГГММДД, оценка span.grade > .grade_95.
 function parseStuudiumGrades(html, period) {
   const doc = parseHtml(`<table>${html}</table>`);
@@ -183,11 +187,11 @@ function parseStuudiumGrades(html, period) {
       for (const grade of td.querySelectorAll(".grade")) {
         const valueEl = [...grade.querySelectorAll("*")].find((e) => [...e.classList].some((c) => /^grade_[A-Z0-9]+$/.test(c)));
         if (!valueEl) continue;
-        const value = cleanText(valueEl);
+        const value = gradeValue(cleanText(valueEl));
         subject.grades.push({
           date: `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`,
           value,
-          numeric: /^\d+$/.test(value) ? Number(value) : null,
+          numeric: gradeNumeric(value),
           active: valueEl.classList.contains("grade_active"),
           note: cleanText(grade.querySelector(".grade_notes")),
           comment: (grade.querySelector(".grade_param_has_comment")?.getAttribute("data-note") || "").trim(),

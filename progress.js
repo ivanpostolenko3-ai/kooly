@@ -40,12 +40,30 @@ function archiveGrades(grades) {
   }
 }
 
+// Оценки, сохранённые, пока Stuudium писал «95%», а Kooly это не понимал: исправить и убрать повторы.
+function fixGradeValues() {
+  const fix = (list) => {
+    const seen = new Set();
+    return list.filter((g) => {
+      const value = gradeValue(g.value);
+      if (value !== g.value) Object.assign(g, { value, numeric: gradeNumeric(value) });
+      const key = gradeKey(g);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+  for (const s of state.grades?.subjects || []) s.grades = fix(s.grades);
+  for (const name of Object.keys(state.gradeArchive || {})) state.gradeArchive[name] = fix(state.gradeArchive[name]);
+}
+
 function progressRange() {
   return PROGRESS_RANGES.find((r) => r.id === state.progressRange) || PROGRESS_RANGES[0];
 }
 
 // Данные для экрана с учётом выбранного периода — в том же виде, что state.grades.
 function progressData() {
+  fixGradeValues();
   const data = state.grades;
   const range = progressRange();
   if (!data || range.id === "period") return data;

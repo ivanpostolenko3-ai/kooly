@@ -477,7 +477,7 @@ def parse_stuudium_grades(page):
                 value_node = next(grade.find_all(lambda n: any(GRADE_VALUE.match(c) for c in n.classes)), None)
                 if not value_node:
                     continue
-                value = value_node.text()
+                value = re.sub(r"^(\d+)\s*%$", r"\1", value_node.text())  # Stuudium пишет «95%» — храним «95»
                 note = next(grade.find_all(lambda n: "grade_notes" in n.classes), None)
                 comment = next(grade.find_all(lambda n: "grade_param_has_comment" in n.classes), None)
                 subject["grades"].append({
