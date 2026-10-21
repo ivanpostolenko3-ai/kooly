@@ -2335,3 +2335,12 @@ select,
   -webkit-user-select: text;
   user-select: text;
 }
+
+/* Переключатель периода в «Edenemine»: помещается на узком экране, при нужде листается вбок */
+.range-switch {
+  margin: 0 0 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.range-switch::-webkit-scrollbar { display: none; }
+.range-switch button { flex: 1 0 auto; white-space: nowrap; }

@@ -1390,6 +1390,11 @@ document.addEventListener("click", (e) => {
     render();
     return window.scrollTo(0, 0);
   }
+  if (action === "progress-range") {
+    state.progressRange = btn.dataset.range;
+    save();
+    return render();
+  }
   if (action.startsWith("cal-") || action.startsWith("gcal-") || action === "ics-export" || action === "stucal-paste") return handleCalendarAction(action, btn);
   if (action.startsWith("edupage-")) return handleEdupageAction(action);
   if (action.startsWith("stuudium-")) return handleStuudiumAction(action);

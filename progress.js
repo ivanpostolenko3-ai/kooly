@@ -8,6 +8,63 @@
 
 let progressSubject = null; // открытый предмет (имя) или null — обзор
 
+// Периоды статистики. «Periood» — текущий период Stuudium как есть; остальные — из архива всех оценок,
+// которые Kooly видел (Stuudium показывает только текущий период, поэтому архив копится с каждой синхронизацией).
+const PROGRESS_RANGES = [
+  { id: "period", label: "Periood" },
+  { id: "1m", label: "Kuu", days: 30, lead: "viimane kuu" },
+  { id: "6m", label: "Pool aastat", days: 183, lead: "viimased pool aastat" },
+  { id: "1y", label: "Aasta", days: 365, lead: "viimane aasta" },
+  { id: "all", label: "Kõik", lead: "kõik salvestatud hinded" },
+];
+
+const gradeKey = (g) => [g.date, g.value, g.note, g.comment].join("|");
+
+// Добавить оценки свежей синхронизации в архив (дубликаты по дате+оценке+описанию не повторяются).
+function archiveGrades(grades) {
+  if (!grades?.subjects?.length) return;
+  if (!state.gradeArchive) {
+    state.gradeArchive = {};
+    state.gradeArchiveSince = Date.now();
+  }
+  const archive = state.gradeArchive;
+  for (const subject of grades.subjects) {
+    const list = archive[subject.name] || (archive[subject.name] = []);
+    const byKey = new Map(list.map((g) => [gradeKey(g), g]));
+    for (const g of subject.grades) {
+      const old = byKey.get(gradeKey(g));
+      if (old) Object.assign(old, g); // например, оценку заменили — обновится «asendatud»
+      else list.push({ ...g });
+    }
+    list.sort((a, b) => a.date.localeCompare(b.date));
+  }
+}
+
+function progressRange() {
+  return PROGRESS_RANGES.find((r) => r.id === state.progressRange) || PROGRESS_RANGES[0];
+}
+
+// Данные для экрана с учётом выбранного периода — в том же виде, что state.grades.
+function progressData() {
+  const data = state.grades;
+  const range = progressRange();
+  if (!data || range.id === "period") return data;
+  if (!state.gradeArchive) archiveGrades(data); // первый запуск после обновления: архив из текущих оценок
+  const cutoff = range.days ? dateKey(addDays(new Date(), -range.days)) : "";
+  const finals = new Map((data.subjects || []).map((s) => [s.name, s.final]));
+  const subjects = Object.entries(state.gradeArchive || {})
+    .map(([name, grades]) => ({ name, final: finals.get(name) || "", grades: grades.filter((g) => g.date >= cutoff) }))
+    .filter((s) => s.grades.length || finals.has(s.name));
+  return { ...data, period: range.lead[0].toUpperCase() + range.lead.slice(1), subjects };
+}
+
+function rangeSwitchHtml() {
+  const current = progressRange().id;
+  return `<div class="segmented range-switch">${PROGRESS_RANGES.map(
+    (r) => `<button data-action="progress-range" data-range="${r.id}" class="${r.id === current ? "active" : ""}">${r.label}</button>`
+  ).join("")}</div>`;
+}
+
 const fmt1 = (x) => x.toFixed(1).replace(".", ",");
 const fmtAvg = (x) => (Math.round(x * 10) / 10 === Math.round(x) ? String(Math.round(x)) : fmt1(x));
 
@@ -130,7 +187,7 @@ function distributionHtml(all, arCount) {
 /* ---------- Экраны ---------- */
 
 function renderProgress() {
-  const data = state.grades;
+  const data = progressData();
   if (!data || !data.subjects?.length) {
     view.innerHTML = `
       <h1 class="page-title">Edenemine</h1>
@@ -140,6 +197,7 @@ function renderProgress() {
     return;
   }
   if (progressSubject) return renderProgressSubject(data.subjects.find((s) => s.name === progressSubject));
+  const range = progressRange();
 
   const stats = data.subjects.map((s) => ({ s, ...subjectStats(s) }));
   const all = stats.flatMap((x) => x.nums);
@@ -148,7 +206,7 @@ function renderProgress() {
   const graded = stats.filter((x) => x.avg !== null).sort((a, b) => b.avg - a.avg);
   const ungraded = stats.filter((x) => x.avg === null);
 
-  let hero = `<section class="hero"><div class="hero-label">${esc(data.period || "Praegune periood")}</div><div class="hero-title">Numbrilisi hindeid veel pole</div></section>`;
+  let hero = `<section class="hero"><div class="hero-label">${esc(data.period || "Praegune periood")}</div><div class="hero-title">${range.id === "period" ? "Numbrilisi hindeid veel pole" : "Sel ajal numbrilisi hindeid pole"}</div></section>`;
   if (values.length) {
     const avg = mean(values);
     const trend = cumulativeAverage(all);
@@ -173,6 +231,7 @@ function renderProgress() {
 
   view.innerHTML = `
     <h1 class="page-title">Edenemine</h1>
+    ${rangeSwitchHtml()}
     ${hero}
     <div class="stats">${tiles.join("")}</div>
     <div class="section-title">Ained</div>
@@ -189,7 +248,8 @@ function renderProgress() {
     ${ungraded.length ? `<p class="page-lead">Hindeid veel pole: ${ungraded.map((x) => esc(splitName(x.s.name).main)).join(", ")}</p>` : ""}
     ${values.length || arCount ? `<section class="card chart"><h2>Hinnete jaotus</h2>${distributionHtml(values, arCount)}<div class="chart-tip" aria-live="polite"></div></section>` : ""}
     ${data.courses?.length ? `<section class="card"><h2>Läbitud valikkursused</h2><ul class="course-list">${data.courses.map((c) => `<li><span>${esc(c.name)}</span><b>${esc(c.final)}</b></li>`).join("")}</ul></section>` : ""}
-    <p class="page-lead">Uuendatud ${humanDay(new Date(data.updatedAt))} kell ${hhmm(new Date(data.updatedAt))} · „AR“ — arvestatud, keskmisesse ei lähe.</p>`;
+    <p class="page-lead">Uuendatud ${humanDay(new Date(data.updatedAt))} kell ${hhmm(new Date(data.updatedAt))} · „AR“ — arvestatud, keskmisesse ei lähe.</p>
+    ${range.id !== "period" ? `<p class="page-lead">Stuudium näitab ainult praegust perioodi, seega Kooly kogub hindeid ise${state.gradeArchiveSince ? ` alates ${humanDay(new Date(state.gradeArchiveSince))}` : ""} — ajalugu kasvab iga sünkroonimisega.</p>` : ""}`;
 }
 
 function renderProgressSubject(subject) {
@@ -207,6 +267,7 @@ function renderProgressSubject(subject) {
       <h1 class="page-title">${esc(n.main)}</h1>
       ${n.sub ? `<p class="page-lead">${esc(n.sub)}</p>` : ""}
     </div>
+    ${rangeSwitchHtml()}
     <div class="stats">
       <div class="stat"><small>Keskmine</small><b>${avg !== null ? `${fmtAvg(avg)} %` : "—"}</b><span>${avg !== null ? `≈ „${grade5(avg)}“` : "numbrilisi pole"}</span></div>
       <div class="stat"><small>Hindeid</small><b>${nums.length}</b><span>${ar ? `+ ${ar} × AR` : "numbrilist"}</span></div>

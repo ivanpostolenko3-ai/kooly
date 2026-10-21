@@ -95,6 +95,7 @@ function applyStuudiumResult(data, at) {
   const st = state.stuudium || (state.stuudium = { school: data.school || STUUDIUM_DEFAULT_SCHOOL });
   const added = applyStuudium(data.tasks || []);
   if (data.grades?.subjects?.length) state.grades = { ...data.grades, updatedAt: at };
+  archiveGrades(data.grades); // история для статистики за месяц, полгода, год
   st.status = "connected";
   st.lastSync = at;
   st.count = (data.tasks || []).length;
