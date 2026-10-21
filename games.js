@@ -535,15 +535,18 @@ function matchHtml() {
 
   return `
     <div class="g-match ${g.over ? "over" : ""}">
+      ${
+        g.emote // реакция — крупно поверх доски, чтобы её точно заметили (и на iPhone, и на Android)
+          ? `<div class="g-react ${g.emote.mine ? "mine" : ""}" aria-live="polite"><span class="g-react-e ${EMOTES.indexOf(g.emote.text) < 4 ? "big" : ""}">${esc(g.emote.text)}</span><small>${g.emote.mine ? "Sina" : esc(g.opp)}</small></div>`
+          : ""
+      }
       <div class="g-players">
         <span class="g-player opp ${!g.over && !v.myTurn ? "turn" : ""}">
           <span class="g-avatar">${esc(g.opp[0].toUpperCase())}</span><b>${esc(g.opp)}</b>
           ${g.oppAway ? `<small class="g-away">ühenduseta…</small>` : ""}
-          ${g.emote && !g.emote.mine ? `<span class="g-bubble">${esc(g.emote.text)}</span>` : ""}
         </span>
         <span class="g-vs">${info.icon} ${esc(info.name)}</span>
         <span class="g-player me ${!g.over && v.myTurn ? "turn" : ""}">
-          ${g.emote?.mine ? `<span class="g-bubble">${esc(g.emote.text)}</span>` : ""}
           <b>${esc(state.games.nick)}</b><span class="g-avatar">${esc(state.games.nick[0].toUpperCase())}</span>
         </span>
       </div>
