@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Как LaunchBackground в iOS-приложении: фон заставки и под сайтом -->
+    <color name="background">#F3F7F6</color>
+    <color name="brand">#004F5B</color>
+    <color name="accent">#FFC836</color>
+    <color name="link">#004F5B</color>
+</resources>

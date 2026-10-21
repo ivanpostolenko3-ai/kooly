@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Значок Kooly (icons/icon.svg) без фона: фон даёт адаптивная иконка Android -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp" android:viewportWidth="728" android:viewportHeight="728">
+    <group android:translateX="108" android:translateY="108">
+        <path android:strokeColor="#FFC836" android:strokeWidth="40" android:fillColor="#00000000"
+            android:pathData="M92,272 a164,164 0 1,0 328,0 a164,164 0 1,0 -328,0" />
+        <path android:fillColor="#FFC836"
+            android:pathData="M240,58 h32 a18,18 0 0 1 18,18 v10 a18,18 0 0 1 -18,18 h-32 a18,18 0 0 1 -18,-18 v-10 a18,18 0 0 1 18,-18 z" />
+        <path android:strokeColor="#FFFFFF" android:strokeWidth="32" android:strokeLineCap="round" android:fillColor="#00000000"
+            android:pathData="M256,272 V178 M256,272 L320,314" />
+        <path android:fillColor="#FFFFFF" android:pathData="M236,272 a20,20 0 1,0 40,0 a20,20 0 1,0 -40,0" />
+    </group>
+</vector>

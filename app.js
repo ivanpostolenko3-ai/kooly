@@ -191,16 +191,48 @@ function save() {
   if (typeof gcalAutoSync === "function") gcalAutoSync();
 }
 
-// Kooly внутри приложения для iPhone (ios/): WKWebView даёт window.webkit.messageHandlers.kooly.
-const hasNative = Boolean(window.webkit?.messageHandlers?.kooly);
+// Kooly внутри приложения: для iPhone (ios/) WKWebView даёт window.webkit.messageHandlers.kooly,
+// для Android (android/) WebView даёт window.KoolyAndroid. Сообщения у обоих одинаковые.
+const isAndroidApp = Boolean(window.KoolyAndroid);
+const hasNative = Boolean(window.webkit?.messageHandlers?.kooly || isAndroidApp);
 
 function nativePost(message) {
   try {
-    window.webkit.messageHandlers.kooly.postMessage(message);
+    if (isAndroidApp) window.KoolyAndroid.post(JSON.stringify(message));
+    else window.webkit.messageHandlers.kooly.postMessage(message);
   } catch {
     // не в приложении
   }
 }
+
+// Сохранить файл (копия данных, .ics). В Android WebView ссылка с download не работает — сохраняет приложение.
+function saveFile(name, mime, text) {
+  if (isAndroidApp) return nativePost({ type: "save-file", name, mime, text });
+  const blob = new Blob([text], { type: mime });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// Кнопка «Назад» в Android: закрыть предмет/настройки или вернуться на «Praegu». false — выйти из приложения.
+window.koolyBack = () => {
+  if (currentTab === "progress" && progressSubject) {
+    progressSubject = null;
+    render();
+    return true;
+  }
+  if (currentTab === "settings" && settingsPage) {
+    openSettings(null);
+    return true;
+  }
+  if (currentTab !== "now") {
+    switchTab("now");
+    return true;
+  }
+  return false;
+};
 
 // Снимок расписания и задач: на Mac — серверу (таймер в строке меню, mac/KoolyMenu),
 // в приложении для iPhone — нативной части (виджеты, Dynamic Island, уведомления).
@@ -1258,7 +1290,9 @@ function notifyPageHtml() {
       </div>
       <p class="muted small" style="margin:12px 0 0">${
         hasNative
-          ? "Pärast „Testi taimerit“ mine avaekraanile või lukusta telefon: taimer on Dynamic Islandil, lukustuskuval ja Kooly vidinas."
+          ? isAndroidApp
+            ? "Pärast „Testi taimerit“ tõmba teavituste paneel alla või lukusta telefon: taimer on Kooly teavituses."
+            : "Pärast „Testi taimerit“ mine avaekraanile või lukusta telefon: taimer on Dynamic Islandil, lukustuskuval ja Kooly vidinas."
           : "Taimer ilmub vahekaardile „Praegu“. Dynamic Island ja vidinad töötavad Kooly rakenduses."
       }</p>
     </section>`;
@@ -1268,7 +1302,7 @@ function testTimer() {
   const now = new Date();
   demoLesson = { n: 1, subject: { id: "demo", name: "Proovitund", items: [] }, room: "101", start: new Date(+now - 60000), end: new Date(+now + 2 * 60000) };
   if (hasNative) nativePost({ type: "test-timer", minutes: 2 });
-  toast(hasNative ? "Taimer käivitatud — vaata Dynamic Islandi ja lukustuskuva" : "Taimer käivitatud — vaata vahekaarti „Praegu“");
+  toast(hasNative ? (isAndroidApp ? "Taimer käivitatud — vaata teavituste paneeli" : "Taimer käivitatud — vaata Dynamic Islandi ja lukustuskuva") : "Taimer käivitatud — vaata vahekaarti „Praegu“");
   setTimeout(() => {
     demoLesson = null;
     if (currentTab === "now") renderNow(true);
@@ -1476,12 +1510,7 @@ document.addEventListener("change", (e) => {
 /* ---------- Varukoopia ---------- */
 
 function exportData() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `kooly-${dateKey(new Date())}.json`;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  saveFile(`kooly-${dateKey(new Date())}.json`, "application/json", JSON.stringify(state, null, 2));
 }
 
 function importData() {

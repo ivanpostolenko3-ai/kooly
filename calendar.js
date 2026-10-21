@@ -444,12 +444,7 @@ function exportIcs() {
     lines.push("END:VEVENT");
   }
   lines.push("END:VCALENDAR");
-  const blob = new Blob([lines.join("\r\n")], { type: "text/calendar;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "kooly.ics";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  saveFile("kooly.ics", "text/calendar;charset=utf-8", lines.join("\r\n"));
   toast(`${plural(tasks.length, "sündmus", "sündmust")} — ava fail ja lisa kalendrisse`);
 }
 

@@ -18,3 +18,9 @@ __pycache__/
 mac/build/
 *.xcodeproj/xcuserdata/
 DerivedData/
+
+# Сборки Android (ключ подписи хранится вне проекта: ~/.android/kooly-release.*)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
