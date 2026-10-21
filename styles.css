@@ -2413,7 +2413,7 @@ select,
 .g-error { margin: 0; color: var(--danger); font-weight: 700; font-size: 0.85rem; text-align: center; }
 
 /* Партия */
-.g-match { display: grid; gap: 12px; padding-bottom: 8px; }
+.g-match { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; padding-bottom: 8px; }
 .g-players { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
 .g-player { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px; border-radius: 18px; border: 2px solid transparent; }
 .g-player.me { justify-content: flex-end; text-align: right; }
@@ -2521,3 +2521,12 @@ select,
 .g-photo-row { display: flex; align-items: center; gap: 14px; justify-content: center; }
 .g-photo-actions { display: grid; gap: 6px; }
 .g-photo-actions label.btn { cursor: pointer; }
+
+/* Время на ход */
+.g-clock { justify-self: center; padding: 6px 14px; border-radius: 99px; background: var(--soft); font-weight: 800; font-variant-numeric: tabular-nums; }
+.g-clock.warn { background: var(--danger-soft); color: var(--danger); animation: blink 1s infinite; }
+
+/* Реванш */
+.g-rematch { display: grid; gap: 10px; justify-items: center; padding: 12px; border-radius: var(--r-md); background: var(--soft); text-align: center; font-weight: 700; }
+.g-rematch.offer { background: var(--accent); color: var(--on-accent); animation: toast-in 0.25s ease-out; }
+.g-rematch .actions { margin: 0; }

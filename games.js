@@ -112,11 +112,19 @@ function gamesOnRender() {
   else if (gWs) gIdleTimer = setTimeout(() => !gamesNeedConnection() && gamesDisconnect(), 30000);
 }
 
+// Ушёл из приложения во время партии — сервер даёт 15 секунд вернуться, потом засчитывает поражение.
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden && gamesNeedConnection()) {
+  const playing = gMatch && !gMatch.over;
+  if (document.hidden) {
+    if (playing) gSend({ t: "away" });
+    return;
+  }
+  if (playing) gSend({ t: "back" });
+  if (gamesNeedConnection()) {
     gRetry = 0;
     gamesConnect();
   }
+  if (playing) tickClock();
 });
 
 function gamesRerender() {
@@ -130,6 +138,8 @@ function gamesMessage(m) {
     case "hi":
       gConnected = true;
       gRetry = 0;
+      // Партия закончилась, пока нас не было (вышло время, ушли из приложения, соперник сдался).
+      if (m.last && gMatch && !gMatch.over && gMatch.room === m.last.room) finishMatch(m.last.win ? { win: true, text: winText(m.last.reason) } : { win: false, text: loseText(m.last.reason) });
       if (gWaiting) gSend({ t: "find", game: gWaiting }); // связь оборвалась во время поиска — ищем снова
       gamesRerender();
       break;
@@ -160,8 +170,29 @@ function gamesMessage(m) {
       gamesRerender();
       break;
     case "opp-left":
-      if (gMatch && !gMatch.over) {
-        finishMatch({ win: true, text: m.reason === "resign" ? "Vastane andis alla" : "Vastane lahkus mängust" });
+      if (gMatch && !gMatch.over) finishMatch({ win: true, text: winText(m.reason) });
+      break;
+    case "lost":
+      if (gMatch && !gMatch.over) finishMatch({ win: false, text: loseText(m.reason) });
+      break;
+    case "draw":
+      if (gMatch && !gMatch.over) finishMatch({ draw: true, text: m.reason === "timeout" ? "Laevu ei paigutatud 3 minutiga" : "Mõlemad lahkusid" });
+      break;
+    case "clock":
+      setClock(m);
+      break;
+    case "rematch-ask": // соперник хочет реванш
+      if (gMatch?.over && gMatch.room === m.room && gMatch.rematch !== "declined-by-me") {
+        gMatch.rematch = gMatch.rematch === "asked" ? "asked" : "offered";
+        if (navigator.vibrate) navigator.vibrate(80);
+        gamesRerender();
+      }
+      break;
+    case "rematch-no":
+    case "rematch-gone":
+      if (gMatch?.over && (!m.room || gMatch.room === m.room)) {
+        gMatch.rematch = "gone";
+        gamesRerender();
       }
       break;
     case "emote":
@@ -176,6 +207,44 @@ function gamesMessage(m) {
       }
       break;
   }
+}
+
+const winText = (reason) => ({ resign: "Vastane andis alla", timeout: "Vastase aeg sai otsa", disconnect: "Vastane lahkus mängust" })[reason] || "Võit";
+const loseText = (reason) => ({ resign: "Andsid alla", timeout: "Sinu aeg sai otsa (3 min)", disconnect: "Lahkusid mängust" })[reason] || "Kaotus";
+
+/* ---------- Время на ход (3 минуты, считает сервер) ---------- */
+
+let gClockTimer = null;
+
+function setClock(c) {
+  if (!gMatch || !c) return;
+  gMatch.clock = { turn: c.turn, deadline: Date.now() + c.left };
+  tickClock();
+}
+
+function clockText() {
+  const c = gMatch?.clock;
+  if (!c || c.turn === null || gMatch.over) return "";
+  const left = Math.max(0, Math.ceil((c.deadline - Date.now()) / 1000));
+  const mine = c.turn === gMatch.seat || c.turn === -1;
+  return `${mine ? "Sinu aeg" : "Vastase aeg"} ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+}
+
+// Раз в секунду обновляем только цифры (без перерисовки доски).
+function tickClock() {
+  clearInterval(gClockTimer);
+  const update = () => {
+    const el = document.querySelector("[data-gclock]");
+    if (!gMatch || gMatch.over) return clearInterval(gClockTimer);
+    if (!el) return;
+    const c = gMatch.clock;
+    const left = c ? (c.deadline - Date.now()) / 1000 : 999;
+    el.textContent = clockText();
+    el.classList.toggle("warn", left <= 30 && (c.turn === gMatch.seat || c.turn === -1));
+    el.hidden = !el.textContent;
+  };
+  update();
+  gClockTimer = setInterval(update, 1000);
 }
 
 /* ---------- Партия ---------- */
@@ -201,6 +270,7 @@ function startMatch(m) {
   }
   if (currentTab !== "games") switchTab("games");
   afterMove();
+  setClock(m.clock);
 }
 
 function saveFleet() {
@@ -213,8 +283,12 @@ function saveFleet() {
 
 function sendMove(m) {
   if (!gMatch || gMatch.over) return;
-  if (!gSend({ t: "move", m })) return toast("Ühendus katkes — ootan…");
   gMatch.moves.push({ s: gMatch.seat, m });
+  const turn = matchView(gMatch).nextSeat; // сервер запускает 3 минуты тому, чей теперь ход
+  if (!gSend({ t: "move", m, turn: turn ?? undefined })) {
+    gMatch.moves.pop();
+    return toast("Ühendus katkes — ootan…");
+  }
   gMatch.sel = null;
   gMatch.promo = null;
   afterMove();
@@ -270,7 +344,7 @@ function matchView(g) {
       const reasons = { mate: "Matt", stalemate: "Patt — viik", material: "Viik — matiks pole jõudu", fifty: "Viik (50 käigu reegel)", nomoves: "Käike pole" };
       result = res.winner === null ? { draw: true, text: reasons[res.reason] } : { win: res.winner === myColor, text: reasons[res.reason] };
     }
-    return { st, myTurn: st.turn === myColor, legal: chess ? RULES.chessLegal(st) : RULES.checkersLegal(st), result, check: chess && RULES.chessInCheck(st) };
+    return { st, myTurn: st.turn === myColor, legal: chess ? RULES.chessLegal(st) : RULES.checkersLegal(st), result, check: chess && RULES.chessInCheck(st), nextSeat: result ? null : st.turn === "w" ? 0 : 1 };
   }
   if (g.game === "tictactoe") {
     const cells = Array(9).fill(null);
@@ -278,7 +352,7 @@ function matchView(g) {
     const res = RULES.tttResult(cells);
     const mark = g.seat === 0 ? "X" : "O";
     const result = res ? (res.winner ? { win: res.winner === mark, text: "Kolm ühes reas" } : { draw: true, text: "Viik" }) : null;
-    return { cells, line: res?.line || null, myTurn: !res && g.moves.length % 2 === g.seat, result, mark };
+    return { cells, line: res?.line || null, myTurn: !res && g.moves.length % 2 === g.seat, result, mark, nextSeat: res ? null : g.moves.length % 2 };
   }
   // Морской бой
   const ready = [false, false];
@@ -308,6 +382,8 @@ function matchView(g) {
     answer: pending && !mine(pending.s) ? pending.i : null,
     waitingAnswer: Boolean(pending && mine(pending.s)),
     myTurn: started && !pending && !result && turn === g.seat,
+    // Чей ход для таймера: при расстановке — кто ещё не готов (-1 — оба), при выстреле — стреляющий.
+    nextSeat: result ? null : !started ? (ready[0] || ready[1] ? (ready[0] ? 1 : 0) : -1) : pending ? pending.s : turn,
   };
 }
 
@@ -365,14 +441,27 @@ function handleGamesAction(action, btn) {
         gSend({ t: "resign" });
         finishMatch({ win: false, text: "Andsid alla" });
       });
+    case "g-rematch":
+      if (!g?.over) return;
+      g.rematch = "asked";
+      gSend({ t: "rematch", room: g.room });
+      return renderGames();
+    case "g-rematch-no":
+      if (g?.over) {
+        gSend({ t: "rematch-no", room: g.room });
+        g.rematch = "declined-by-me";
+      }
+      return renderGames();
     case "g-again": {
       const game = g?.game;
+      if (g?.over && g.rematch !== "gone") gSend({ t: "rematch-no", room: g.room }); // ушли искать другого — реванша не будет
       gMatch = null;
       gWaiting = game;
       gSend({ t: "find", game });
       return renderGames();
     }
     case "g-lobby":
+      if (g?.over && g.rematch !== "gone") gSend({ t: "rematch-no", room: g.room });
       gMatch = null;
       return renderGames();
     case "g-emote":
@@ -555,7 +644,7 @@ function renderGames() {
         <small>${esc(g.hint)}</small>
       </button>`
     ).join("")}</div>
-    <p class="page-lead">Vajuta mängule — Kooly leiab vastase sinu koolist. Vestlust pole, ainult kiired emotikonid.</p>`;
+    <p class="page-lead">Vajuta mängule — Kooly leiab vastase sinu koolist. Igaks käiguks on 3 minutit. Kui lahkud mängu ajal rakendusest, saad kaotuse.</p>`;
   updateGameStats();
 }
 
@@ -618,16 +707,34 @@ function matchHtml() {
         </span>
       </div>
       <div class="g-status ${g.over ? (g.over.win ? "win" : g.over.draw ? "draw" : "lose") : v.myTurn ? "mine" : ""}">${status}</div>
+      ${g.over ? "" : `<div class="g-clock" data-gclock ${clockText() ? "" : "hidden"}>${clockText()}</div>`}
       ${!gConnected && !g.over ? `<p class="g-error">Ühendus katkes — ühendan uuesti…</p>` : ""}
-      ${g.oppAway && !g.over ? `<p class="muted small center">Vastane on ühenduseta. Kui ta 90 sekundi jooksul tagasi ei tule, võidad sina.</p>` : ""}
+      ${g.oppAway && !g.over ? `<p class="muted small center">Vastane lahkus rakendusest. Kui ta 15 sekundi jooksul tagasi ei tule, võidad sina.</p>` : ""}
       ${board}
       ${
         g.over
-          ? `<div class="actions center"><button class="btn primary" data-action="g-again">Uus vastane</button><button class="btn" data-action="g-lobby">Mängud</button></div>`
+          ? `${rematchHtml(g)}<div class="actions center"><button class="btn ${g.rematch === "offered" ? "" : "primary"}" data-action="g-again">Uus vastane</button><button class="btn" data-action="g-lobby">Mängud</button></div>`
           : `<div class="g-emotes">${EMOTES.map((e, i) => `<button data-action="g-emote" data-e="${i}">${esc(e)}</button>`).join("")}</div>
              <div class="actions center"><button class="btn small danger" data-action="g-resign">Anna alla</button></div>`
       }
     </div>`;
+}
+
+// Реванш с тем же соперником: предложить, ждать ответа, принять или отказаться.
+function rematchHtml(g) {
+  switch (g.rematch) {
+    case "asked":
+      return `<div class="g-rematch"><span>Ootan, kas ${esc(g.opp)} tahab kordusmängu…</span></div>`;
+    case "offered":
+      return `<div class="g-rematch offer"><span><b>${esc(g.opp)}</b> tahab kordusmängu!</span>
+        <div class="actions center"><button class="btn primary" data-action="g-rematch">Nõustu</button><button class="btn" data-action="g-rematch-no">Keeldu</button></div></div>`;
+    case "gone":
+      return `<div class="g-rematch"><span>${esc(g.opp)} ei soovi kordusmängu</span></div>`;
+    case "declined-by-me":
+      return "";
+    default:
+      return `<div class="actions center"><button class="btn primary" data-action="g-rematch">🔁 Kordusmäng</button></div>`;
+  }
 }
 
 /* --- Доски --- */

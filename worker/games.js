@@ -3,14 +3,19 @@
 // передаёт ходы и считает, сколько людей ждёт и играет. Правила игр проверяют сами клиенты (games-rules.js),
 // сервер только соединяет и хранит список ходов, чтобы после обрыва связи игру можно было продолжить.
 //
-// Клиент → сервер: hello {pid, nick, avatar?} · avatar {a} · find {game} · cancel · move {m} · end · resign · emote {e}
+// Клиент → сервер: hello {pid, nick, avatar?} · avatar {a} · find {game} · cancel · move {m, turn} · end · resign · emote {e} · away · back
+//                  rematch {room} · rematch-no {room}   (реванш с тем же соперником после партии)
 // Сервер → клиент: stats {online, games} · waiting {game} · matched {room, game, seat, opp, oppAvatar} · resume {…, moves}
-//                  move {m} · opp-away · opp-back · opp-left {reason} · emote {e} · error {code}
+//                  rematch-ask · rematch-no · rematch-gone · move {m} · clock {turn, left} · opp-away · opp-back · opp-left {reason} · lost {reason} · draw {reason} · emote {e} · error {code}
+//
+// Время: на ход 3 минуты (TURN_LIMIT) — не успел, поражение. Ушёл из приложения — поражение через 15 секунд
+// (короткий запас — на случай, если просто моргнул интернет). Чей ход, сообщает клиент в move.turn (-1 — ходят оба: расстановка кораблей).
 
 import { DurableObject } from "cloudflare:workers";
 
 export const GAMES = ["chess", "checkers", "tictactoe", "battleship"];
-const AWAY_GRACE = 90_000; // соперник пропал (закрыл приложение) — ждём его полторы минуты, потом победа
+const AWAY_GRACE = 15_000; // вышел из приложения или пропала связь — 15 секунд на возвращение, потом поражение
+const TURN_LIMIT = 180_000; // 3 минуты на ход
 const MAX_MOVES = 3000;
 const EMOTES = 6;
 // Фото профиля: маленький JPEG 96×96, который приложение само уменьшает (обычно 3–6 КБ).
@@ -100,7 +105,10 @@ export class GameLobby extends DurableObject {
         }
         this.setAtt(ws, { pid, nick, status: "idle", game: null, room: null });
         await this.saveAvatar(pid, m.avatar);
-        this.send(ws, { t: "hi" });
+        // Партия закончилась, пока его не было (время вышло, соперник сдался) — сообщить итог.
+        const last = (await this.ctx.storage.get("x:" + pid)) || null;
+        if (last) await this.ctx.storage.delete("x:" + pid);
+        this.send(ws, { t: "hi", last });
         await this.resume(ws, pid);
         break;
       }
@@ -130,8 +138,55 @@ export class GameLobby extends DurableObject {
         const seat = room.pids.indexOf(a.pid);
         if (seat < 0) return;
         room.moves.push({ s: seat, m: m.m });
+        if ([-1, 0, 1].includes(m.turn)) {
+          room.turn = m.turn;
+          room.turnAt = Date.now();
+        }
         await this.ctx.storage.put("r:" + room.id, room);
         this.sendTo(room.pids[1 - seat], { t: "move", s: seat, m: m.m });
+        this.sendClock(room);
+        await this.scheduleAlarm();
+        break;
+      }
+      case "away": // ушёл из приложения (свернул, заблокировал телефон) — 15 секунд на возвращение
+      case "back": {
+        const room = await this.room(a.room);
+        if (!room || room.over) return;
+        const seat = room.pids.indexOf(a.pid);
+        room.away[seat] = m.t === "away" ? Date.now() : 0;
+        await this.ctx.storage.put("r:" + room.id, room);
+        this.sendTo(room.pids[1 - seat], m.t === "away" ? { t: "opp-away", grace: AWAY_GRACE } : { t: "opp-back" });
+        if (m.t === "away") await this.scheduleAlarm();
+        break;
+      }
+      case "rematch": {
+        // Реванш: оба нажали «Kordusmäng» — новая партия с тем же соперником, первым ходит тот, кто был вторым.
+        const rec = await this.ctx.storage.get("m:" + m.room);
+        const seat = rec ? rec.pids.indexOf(a.pid) : -1;
+        const otherPid = rec && rec.pids[1 - seat];
+        const other = otherPid && this.byPid(otherPid).find((o) => this.att(o).status !== "playing");
+        if (seat < 0 || !other || a.status === "playing") {
+          this.send(ws, { t: "rematch-gone" });
+          break;
+        }
+        rec.want[seat] = true;
+        if (rec.want[1 - seat]) {
+          await this.ctx.storage.delete("m:" + m.room);
+          if (this.att(other).status === "waiting") this.setAtt(other, { status: "idle", game: null });
+          const [s0, s1] = seat === 0 ? [other, ws] : [ws, other]; // прошлый второй (seat 1) теперь первый
+          await this.startRoom(rec.game, s0, s1, true);
+        } else {
+          await this.ctx.storage.put("m:" + m.room, rec);
+          this.sendTo(otherPid, { t: "rematch-ask", room: m.room });
+        }
+        break;
+      }
+      case "rematch-no": {
+        const rec = await this.ctx.storage.get("m:" + m.room);
+        const seat = rec ? rec.pids.indexOf(a.pid) : -1;
+        if (seat < 0) break;
+        await this.ctx.storage.delete("m:" + m.room);
+        this.sendTo(rec.pids[1 - seat], { t: "rematch-no", room: m.room });
         break;
       }
       case "emote": {
@@ -174,8 +229,7 @@ export class GameLobby extends DurableObject {
         room.away[seat] = Date.now();
         await this.ctx.storage.put("r:" + room.id, room);
         this.sendTo(room.pids[1 - seat], { t: "opp-away", grace: AWAY_GRACE });
-        const alarm = await this.ctx.storage.getAlarm();
-        if (!alarm) await this.ctx.storage.setAlarm(Date.now() + AWAY_GRACE + 1000);
+        await this.scheduleAlarm();
       }
     }
     this.scheduleStats();
@@ -191,7 +245,7 @@ export class GameLobby extends DurableObject {
     await this.ctx.storage.put("r:" + room.id, room);
     this.setAtt(ws, { status: "playing", game: room.game, room: room.id });
     const oppAvatar = (await this.ctx.storage.get("a:" + room.pids[1 - seat])) || null;
-    this.send(ws, { t: "resume", room: room.id, game: room.game, seat, opp: room.nicks[1 - seat], oppAvatar, moves: room.moves });
+    this.send(ws, { t: "resume", room: room.id, game: room.game, seat, opp: room.nicks[1 - seat], oppAvatar, moves: room.moves, clock: this.clock(room) });
     this.sendTo(room.pids[1 - seat], { t: "opp-back" });
   }
 
@@ -208,8 +262,8 @@ export class GameLobby extends DurableObject {
     return id ? await this.ctx.storage.get("r:" + id) : null;
   }
 
-  async startRoom(game, wsA, wsB) {
-    const [s0, s1] = Math.random() < 0.5 ? [wsA, wsB] : [wsB, wsA]; // кто ходит первым — случайно
+  async startRoom(game, wsA, wsB, fixedOrder = false) {
+    const [s0, s1] = fixedOrder || Math.random() < 0.5 ? [wsA, wsB] : [wsB, wsA]; // кто ходит первым — случайно (кроме реванша)
     const a0 = this.att(s0), a1 = this.att(s1);
     const room = {
       id: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
@@ -220,46 +274,81 @@ export class GameLobby extends DurableObject {
       away: [0, 0],
       over: false,
       created: Date.now(),
+      turn: game === "battleship" ? -1 : 0, // в морском бое сначала оба расставляют корабли
+      turnAt: Date.now(),
     };
     await this.ctx.storage.put({ ["r:" + room.id]: room, ["p:" + a0.pid]: room.id, ["p:" + a1.pid]: room.id });
     const avatars = await this.ctx.storage.get(["a:" + a0.pid, "a:" + a1.pid]);
     for (const [seat, ws] of [s0, s1].entries()) {
       this.setAtt(ws, { status: "playing", game, room: room.id });
       const oppAvatar = avatars.get("a:" + room.pids[1 - seat]) || null;
-      this.send(ws, { t: "matched", room: room.id, game, seat, opp: room.nicks[1 - seat], oppAvatar });
+      this.send(ws, { t: "matched", room: room.id, game, seat, opp: room.nicks[1 - seat], oppAvatar, clock: this.clock(room) });
     }
+    await this.scheduleAlarm();
   }
 
-  // win: { pid, reason } — кому присудить победу (сдача, соперник не вернулся); null — партия кончилась по правилам.
+  clock(room) {
+    return { turn: room.turn ?? null, left: Math.max(0, TURN_LIMIT - (Date.now() - (room.turnAt || Date.now()))) };
+  }
+
+  sendClock(room) {
+    const msg = { t: "clock", ...this.clock(room) };
+    for (const pid of room.pids) this.sendTo(pid, msg);
+  }
+
+  // win: { pid, reason } — кому присудить победу (сдача, время вышло, ушёл из приложения); null — по правилам.
   async finish(id, win) {
     const room = await this.room(id);
     if (!room) return;
     room.over = true;
     await this.ctx.storage.delete(["r:" + room.id, "p:" + room.pids[0], "p:" + room.pids[1]]);
+    // Запомнить пару для реванша (на 10 минут).
+    await this.ctx.storage.put("m:" + room.id, { game: room.game, pids: room.pids, want: [false, false], at: Date.now() });
     for (const pid of room.pids) {
       for (const ws of this.byPid(pid)) if (this.att(ws).room === room.id) this.setAtt(ws, { status: "idle", game: null, room: null });
     }
-    if (win) this.sendTo(win.pid, { t: "opp-left", reason: win.reason });
+    if (!win) return;
+    const loser = room.pids.find((p) => p !== win.pid);
+    this.sendTo(win.pid, { t: "opp-left", reason: win.reason });
+    this.sendTo(loser, { t: "lost", reason: win.reason });
+    // Кого сейчас нет на связи — узнает итог, когда вернётся (hello → last).
+    if (!this.byPid(win.pid).length) await this.ctx.storage.put("x:" + win.pid, { room: room.id, win: true, reason: win.reason });
+    if (!this.byPid(loser).length) await this.ctx.storage.put("x:" + loser, { room: room.id, win: false, reason: win.reason });
   }
 
-  // Будильник: соперник не вернулся за полторы минуты — победа оставшемуся. Заодно чистим брошенные партии.
+  // Будильник — на ближайший срок: конец времени на ход или конец 15 секунд после ухода из приложения.
+  async scheduleAlarm() {
+    let next = Infinity;
+    for (const room of (await this.ctx.storage.list({ prefix: "r:" })).values()) {
+      if (room.over) continue;
+      if (room.turn !== null && room.turn !== undefined) next = Math.min(next, room.turnAt + TURN_LIMIT);
+      for (const t of room.away) if (t) next = Math.min(next, t + AWAY_GRACE);
+    }
+    if (next < Infinity) await this.ctx.storage.setAlarm(next + 500);
+  }
+
+  // Будильник: время на ход вышло или игрок не вернулся в приложение — поражение. Заодно чистим брошенные партии.
   async alarm() {
     const now = Date.now();
-    let next = 0;
-    const rooms = await this.ctx.storage.list({ prefix: "r:" });
-    for (const room of rooms.values()) {
-      const awaySeat = room.away.findIndex((t) => t > 0);
-      if (room.away[0] && room.away[1]) {
-        if (now - Math.max(...room.away) >= AWAY_GRACE) await this.finish(room.id, null); // ушли оба
-        else next = next || now + AWAY_GRACE;
-      } else if (awaySeat >= 0) {
-        if (now - room.away[awaySeat] >= AWAY_GRACE) await this.finish(room.id, { pid: room.pids[1 - awaySeat], reason: "disconnect" });
-        else next = Math.min(next || Infinity, room.away[awaySeat] + AWAY_GRACE + 1000);
+    for (const room of (await this.ctx.storage.list({ prefix: "r:" })).values()) {
+      if (room.over) continue;
+      const gone = [0, 1].filter((s) => room.away[s] && now - room.away[s] >= AWAY_GRACE);
+      const timedOut = room.turn !== null && room.turn !== undefined && now - room.turnAt >= TURN_LIMIT;
+      if (gone.length === 2 || (timedOut && room.turn === -1)) {
+        // Ушли оба или никто не расставил корабли — партия без победителя.
+        for (const pid of room.pids) this.sendTo(pid, { t: "draw", reason: gone.length === 2 ? "left" : "timeout" });
+        await this.finish(room.id, null);
+      } else if (gone.length === 1) {
+        await this.finish(room.id, { pid: room.pids[1 - gone[0]], reason: "disconnect" });
+      } else if (timedOut) {
+        await this.finish(room.id, { pid: room.pids[1 - room.turn], reason: "timeout" });
       } else if (now - room.created > 24 * 3600_000 && !room.pids.some((p) => this.byPid(p).length)) {
         await this.finish(room.id, null);
       }
     }
-    if (next) await this.ctx.storage.setAlarm(next);
+    // Старые предложения реванша — убрать.
+    for (const [key, rec] of await this.ctx.storage.list({ prefix: "m:" })) if (now - rec.at > 10 * 60_000) await this.ctx.storage.delete(key);
+    await this.scheduleAlarm();
     this.scheduleStats();
   }
 
