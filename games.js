@@ -113,10 +113,23 @@ function gamesOnRender() {
 }
 
 // Ушёл из приложения во время партии — сервер даёт 15 секунд вернуться, потом засчитывает поражение.
+// Ушёл из приложения во время поиска соперника — поиск отменяется, при возвращении будет список игр
+// (иначе тебя могли бы соединить с кем-то, пока тебя нет).
+function stopSearchOnLeave() {
+  if (!gWaiting) return;
+  gSend({ t: "cancel" });
+  gWaiting = null;
+  gamesRerender();
+}
+
+window.addEventListener("pagehide", stopSearchOnLeave);
+
 document.addEventListener("visibilitychange", () => {
   const playing = gMatch && !gMatch.over;
   if (document.hidden) {
-    if (playing) gSend({ t: "away" });
+    const searching = Boolean(gWaiting);
+    stopSearchOnLeave();
+    if (playing || searching) gSend({ t: "away" });
     return;
   }
   if (playing) gSend({ t: "back" });

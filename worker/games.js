@@ -150,6 +150,7 @@ export class GameLobby extends DurableObject {
       }
       case "away": // ушёл из приложения (свернул, заблокировал телефон) — 15 секунд на возвращение
       case "back": {
+        if (m.t === "away" && a.status === "waiting") this.setAtt(ws, { status: "idle", game: null }); // не соединять с ушедшим
         const room = await this.room(a.room);
         if (!room || room.over) return;
         const seat = room.pids.indexOf(a.pid);
